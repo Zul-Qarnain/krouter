@@ -1,3 +1,54 @@
+# v0.5.165 (2026-10-18) — the image URLs you pass, and the ones providers hand back, are checked before kRouter fetches them
+
+**If your kRouter is reachable by anyone but you, upgrade.** The image endpoints fetched URLs
+server-side without checking where they pointed. `/v1/images/generations` is unauthenticated by
+default (`requireApiKey` is not among the default settings) and does no catalog check on the model
+string, so a request needing no key at all:
+
+```json
+{ "model": "cloudflare-ai/@cf/runwayml/stable-diffusion-v1-5-inpainting",
+  "prompt": "a cat",
+  "image": "http://169.254.169.254/latest/meta-data/iam/security-credentials/" }
+```
+
+made kRouter read that address and base64 the response into the outbound provider request. On a
+cloud VM, that address is the instance metadata service. This was confirmed end to end against a
+real listener before the fix — one hit on the internal endpoint, the secret present in the built
+request body — and is refused after it.
+
+**If your kRouter has been exposed to the internet on a cloud VM with an instance role, rotate
+that instance's credentials.** There is no way from here to tell whether anyone used this, and
+rotating is cheap next to the alternative. A kRouter only you can reach was never exposed by this.
+
+The same unguarded reader was reached a second way, from a URL in a provider's own response, and
+the async image providers had a third and worse variant: they poll a status URL taken out of the
+provider's reply, and that poll carries the provider's own API key. A hostile or compromised
+response — or a single redirect off a legitimate one, since nothing re-validated the hop — pointed
+that request at any host and the key went with it.
+
+## Fixed
+
+- **A source-image URL is validated before it is read.** Anything you pass as `image` or `mask` now
+  goes through kRouter's SSRF guard: loopback, link-local and cloud-metadata addresses, private
+  ranges, the IPv6 spellings of all of those, and hostnames that merely *resolve* to one are
+  refused with a 400 rather than fetched. Redirects are re-validated hop by hop instead of being
+  followed, so a public URL cannot 30x its way inside.
+
+- **A provider's status URL can no longer walk off with that provider's key.** fal.ai's
+  `status_url` and `response_url`, and Black Forest Labs' `polling_url`, are read straight out of
+  the submit response and are now checked the same way. Runway and NanoBanana poll a fixed host, so
+  their exposure was only the unchecked redirect — closed too. Runway's task id is no longer
+  interpolated into the poll path unescaped. Poll intervals, timeouts and error messages are
+  unchanged.
+
+- **Both reads are bounded.** A source image gets a 15-second timeout and a 20 MiB ceiling; a
+  status poll gets 15 seconds and 1 MiB. The ceiling is counted off the bytes that actually arrive
+  rather than read from `content-length`, which is a claim by whoever is on the other end and is
+  absent entirely on a chunked response. Previously either read could hang or stream without limit.
+
+Nothing in your configuration changes, and a URL on the public internet is fetched exactly as
+before.
+
 # v0.5.164 (2026-10-07) — Zenith stops preferring your last account, Anthropic spend caps stop costing a request each time, and Cline works through kRouter again
 
 **Everyone with more than one account on a provider: upgrade.** Zenith, the default routing engine,

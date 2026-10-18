@@ -10,8 +10,21 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { handleImageGenerationCore } from "../../open-sse/handlers/imageGenerationCore.js";
-import { CODEX_CLI_VERSION } from "../../open-sse/config/providers.js";
+
+// urlToBase64 resolves a source-image hostname through the SSRF guard before
+// fetching it (see image-source-url-ssrf.test.js), so pin DNS to a public
+// address rather than letting these tests reach a real resolver.
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns", () => ({
+  default: { promises: { lookup: lookupMock } },
+  promises: { lookup: lookupMock },
+}));
+lookupMock.mockResolvedValue([{ address: "203.0.113.10", family: 4 }]);
+
+// Imported after the mock above rather than statically, so nothing in either
+// module graph is hoisted above the node:dns registration.
+const { handleImageGenerationCore } = await import("../../open-sse/handlers/imageGenerationCore.js");
+const { CODEX_CLI_VERSION } = await import("../../open-sse/config/providers.js");
 
 const originalFetch = global.fetch;
 
@@ -475,8 +488,14 @@ describe("handleImageGenerationCore", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(global.fetch).toHaveBeenNthCalledWith(1, "https://example.com/source.png");
-    expect(global.fetch).toHaveBeenNthCalledWith(2, "https://example.com/mask.png");
+    // Both source reads go through the guarded reader: right URL, redirects handled
+    // manually so each hop is re-validated, and a timeout on the request.
+    for (const [i, url] of [[0, "https://example.com/source.png"], [1, "https://example.com/mask.png"]]) {
+      const [calledUrl, init] = global.fetch.mock.calls[i];
+      expect(calledUrl).toBe(url);
+      expect(init.redirect).toBe("manual");
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    }
 
     const providerCall = global.fetch.mock.calls[2];
     expect(providerCall[0]).toBe("https://api.cloudflare.com/client/v4/accounts/cf-account/ai/run/@cf/runwayml/stable-diffusion-v1-5-inpainting");
