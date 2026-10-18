@@ -12,6 +12,11 @@ export const POLL_TIMEOUT_MS = 120000;
 export const IMAGE_FETCH_TIMEOUT_MS = 15000;
 export const IMAGE_FETCH_MAX_BYTES = 20 * 1024 * 1024;
 
+// A status poll is a small JSON document, so it gets a much tighter ceiling than
+// an image read.
+export const POLL_REQUEST_TIMEOUT_MS = 15000;
+export const POLL_MAX_BYTES = 1024 * 1024;
+
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Map OpenAI size to provider-specific aspect ratio
@@ -67,6 +72,26 @@ export async function urlToBase64(url, { maxBytes = IMAGE_FETCH_MAX_BYTES } = {}
   const res = await fetchPublic(url, { signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
   return (await readCapped(res, maxBytes)).toString("base64");
+}
+
+// Poll a provider's job-status URL.
+//
+// On the async adapters this URL comes out of the provider's own submit response
+// (fal's status_url/response_url, BFL's polling_url) and the request carries that
+// provider's credential -- so an unvalidated URL, or an unvalidated redirect off a
+// legitimate one, hands the key to whatever host the response named. That is a
+// credential leak, not just a blind internal read, which is why even the adapters
+// whose host is fixed (runwayml, nanobanana) poll through here: fetchPublic
+// re-validates every hop instead of following it.
+//
+// `label` keeps each adapter's own error wording ("Fal status 500").
+export async function pollJson(url, { headers, label, maxBytes = POLL_MAX_BYTES }) {
+  const res = await fetchPublic(url, {
+    headers,
+    signal: AbortSignal.timeout(POLL_REQUEST_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`${label} status ${res.status}`);
+  return JSON.parse((await readCapped(res, maxBytes)).toString("utf8"));
 }
 
 export function nowSec() {

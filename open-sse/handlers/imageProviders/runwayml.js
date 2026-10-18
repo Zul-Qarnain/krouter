@@ -1,5 +1,5 @@
 // Runway ML — async submit + /tasks/{id} polling
-import { sleep, nowSec, sizeToAspectRatio, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base.js";
+import { sleep, nowSec, sizeToAspectRatio, pollJson, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base.js";
 
 const BASE_URL = "https://api.dev.runwayml.com/v1";
 
@@ -28,13 +28,13 @@ export default {
   async parseResponse(response, { headers }) {
     const { id } = await response.json();
     if (!id) throw new Error("Runway: no task id returned");
-    const taskUrl = `${BASE_URL}/tasks/${id}`;
+    // The id is interpolated into the path, so it is escaped: it cannot move the
+    // host, but it should not be able to shape the path either.
+    const taskUrl = `${BASE_URL}/tasks/${encodeURIComponent(id)}`;
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(POLL_INTERVAL_MS);
-      const r = await fetch(taskUrl, { headers });
-      if (!r.ok) throw new Error(`Runway status ${r.status}`);
-      const s = await r.json();
+      const s = await pollJson(taskUrl, { headers, label: "Runway" });
       if (s.status === "SUCCEEDED") return s;
       if (s.status === "FAILED" || s.status === "CANCELLED") throw new Error(s.failure || "Runway task failed");
     }

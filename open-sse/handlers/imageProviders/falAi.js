@@ -1,5 +1,5 @@
 // Fal.ai — async submit + queue polling
-import { sleep, nowSec, sizeToAspectRatio, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base.js";
+import { sleep, nowSec, sizeToAspectRatio, pollJson, POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "./_base.js";
 
 const BASE_URL = "https://queue.fal.run";
 
@@ -21,12 +21,9 @@ export default {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(POLL_INTERVAL_MS);
-      const r = await fetch(status_url, { headers });
-      if (!r.ok) throw new Error(`Fal status ${r.status}`);
-      const s = await r.json();
+      const s = await pollJson(status_url, { headers, label: "Fal" });
       if (s.status === "COMPLETED") {
-        const fr = await fetch(response_url, { headers });
-        return await fr.json();
+        return await pollJson(response_url, { headers, label: "Fal" });
       }
       if (s.status === "FAILED") throw new Error(s.error || "Fal generation failed");
     }
