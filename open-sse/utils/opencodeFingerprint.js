@@ -281,8 +281,15 @@ export function applyFingerprintTools(body, shape = "chat") {
   aliasHistoryToolCalls(body, map);
   if (appended.length) noteUnavailableTools(body, shape, appended);
 
-  // Responses keeps its explicit auto default. Never default to "none": upstream
-  // answered tool_choice "none" with 403 FreeTierError while this gate was new.
+  // Never send "none", whatever the caller asked for. Upstream answered
+  // tool_choice "none" with 403 FreeTierError, and the read/shell tools appended
+  // above are the whole reason the gate answers 200 at all -- telling the model not
+  // to use them defeats the fingerprint. Only the absent case was handled before,
+  // so a caller that passed "none" explicitly still got a 403 on the chat and
+  // claude shapes (the responses path coerces separately). Deleting it falls back
+  // to the provider default, which is auto.
+  if (body.tool_choice === "none") delete body.tool_choice;
+  // Responses keeps its explicit auto default.
   if (!body.tool_choice && shape === "responses") body.tool_choice = "auto";
 
   recordRenamedToolNames(body, map);

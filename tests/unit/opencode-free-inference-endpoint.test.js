@@ -16,7 +16,6 @@ import { readFileSync } from "node:fs";
 import {
   OpenCodeExecutor,
   OPENCODE_SESSION_RE,
-  generateSessionId,
   translateSessionId,
   decodeSessionCounter,
 } from "../../open-sse/executors/opencode.js";
@@ -86,13 +85,18 @@ describe("OpenCode Free request headers mirror the v2 CLI", () => {
 
 describe("OpenCode Free session ids decode the way the gate expects", () => {
   it("mints ses_<12 hex><14 base62>", () => {
-    expect(generateSessionId()).toMatch(OPENCODE_SESSION_RE);
+    expect(translateSessionId("conversation-1")).toMatch(OPENCODE_SESSION_RE);
   });
 
   it("keeps the encoded counter small — 500 was answered with 403", () => {
     // Upstream decodes the prefix; live probes passed at counter 1 and failed at 500.
+    // Upstream mints from a live counter that climbs past the limit under a burst
+    // inside one millisecond; kRouter derives every id from a seed instead, so the
+    // counter is pinned to 1 no matter how many ids are made (see translateSessionId).
     expect(decodeSessionCounter(translateSessionId("conversation-1"))).toBe(1);
-    for (let i = 0; i < 40; i++) expect(decodeSessionCounter(generateSessionId())).toBeLessThan(17);
+    for (let i = 0; i < 40; i++) {
+      expect(decodeSessionCounter(translateSessionId(`conversation-${i}`))).toBeLessThan(17);
+    }
   });
 
   it("derives the same id for one conversation and different ids for two", () => {
