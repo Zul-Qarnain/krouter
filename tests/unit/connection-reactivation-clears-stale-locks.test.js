@@ -1,4 +1,4 @@
-// 0.5.165 — an OAuth re-login (or a validated key edit) marks the connection
+// 0.5.166 — an OAuth re-login (or a validated key edit) marks the connection
 // testStatus "active" but merged with { ...existing, ...data }, so every
 // modelLock_*, backoffLevel, rateLimitedUntil and errorCode survived and the
 // freshly re-logged account kept being skipped. Only Test connection cleared

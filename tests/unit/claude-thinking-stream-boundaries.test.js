@@ -1,4 +1,4 @@
-// Thinking/answer boundaries across the OpenAI pivot (0.5.165, upstream 5d2cfbf3).
+// Thinking/answer boundaries across the OpenAI pivot (0.5.166, upstream 5d2cfbf3).
 //
 // claude-to-openai used to mark a Claude thinking block with literal "<think>" /
 // "</think>" chunks in delta.content while the thinking text itself went out in

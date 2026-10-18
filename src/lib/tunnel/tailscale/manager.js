@@ -6,7 +6,7 @@ import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/ma
 
 initDbHooks(getSettings, updateSettings);
 
-// 0.5.165 — the enable flow's health wait is non-fatal (the watchdog re-verifies),
+// 0.5.166 — the enable flow's health wait is non-fatal (the watchdog re-verifies),
 // so cap it at 20 s instead of the 180 s HEALTH_CHECK.timeoutMs (upstream e7c269b8).
 const ENABLE_HEALTH_TIMEOUT_MS = 20000;
 

@@ -61,7 +61,7 @@ export const CODEX_AUTOPING_CONFIG = {
   settingsKey: "codexAutoPing",
   tickIntervalMs: 60000,
   pingLeadMs: 5000,
-  // 0.5.165 — sendCodexPing posts this id straight to
+  // 0.5.166 — sendCodexPing posts this id straight to
   // chatgpt.com/backend-api/codex/responses, and gpt-5-mini is not on the Codex
   // roster at all (it is a GitHub Copilot id and was never in the cx catalog), so
   // the warm-up could not open a window. gpt-5.6-terra is the lightweight model

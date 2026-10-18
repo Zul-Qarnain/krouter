@@ -243,7 +243,7 @@ export function parseQuotaData(provider, data) {
     return [];
   }
 
-  // 0.5.165 — Claude rows need their own order. The PROVIDER_MODELS sort below
+  // 0.5.166 — Claude rows need their own order. The PROVIDER_MODELS sort below
   // keys on model ids ("claude-opus-5-5"), never on quota row names
   // ("weekly opus (7d)"), so every Claude row scored 999 and the tracker simply
   // kept Anthropic's payload order — which moves between polls now that scoped

@@ -1,4 +1,4 @@
-// 0.5.165 — when every account for a provider is cooling down, the chat,
+// 0.5.166 — when every account for a provider is cooling down, the chat,
 // embeddings, web-fetch and web-search handlers answered with the LAST upstream
 // status (or the stored lastErrorCode): a stale 401 or 400. Claude Code reads a
 // 401 as "your key is bad" and stops, though the accounts are only parked. They

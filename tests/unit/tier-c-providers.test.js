@@ -189,7 +189,7 @@ describe("CodeBuddy CN — gateway quirks", () => {
     expect(out.stream).toBe(true);
   });
 
-  // 0.5.165 (upstream d1e98d9a, #2071) — the forced default is gone: sending
+  // 0.5.166 (upstream d1e98d9a, #2071) — the forced default is gone: sending
   // reasoning_effort:"medium" + reasoning_summary:"auto" on a request the client
   // asked no reasoning on trips CodeBuddy's content filter. See
   // codebuddy-reasoning-is-opt-in-and-clamped.test.js.

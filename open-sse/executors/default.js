@@ -23,7 +23,7 @@ export class DefaultExecutor extends BaseExecutor {
     let transformed = this.applyJsonSchemaFallback(body);
 
     if (transformed && typeof transformed === "object") {
-      // 0.5.165 (upstream 49ba54b2 + a07ed95b) — a native passthrough body (Claude
+      // 0.5.166 (upstream 49ba54b2 + a07ed95b) — a native passthrough body (Claude
       // Code -> claude) never reaches prepareClaudeRequest, and neither does the
       // provider-level thinking "off" injected on it. This is the last stop before
       // the wire, so always-thinking Claude models get their rewrite here too.
@@ -104,7 +104,7 @@ export class DefaultExecutor extends BaseExecutor {
     }
   }
 
-  // 0.5.165 — `body` is the request about to be sent (BaseExecutor.execute passes it,
+  // 0.5.166 — `body` is the request about to be sent (BaseExecutor.execute passes it,
   // upstream f4f06f29); headers derived from it are per request, never cached.
   buildHeaders(credentials, stream = true, url = null, model = null, body = null) {
     const headers = { "Content-Type": "application/json", ...this.config.headers };
@@ -126,7 +126,7 @@ export class DefaultExecutor extends BaseExecutor {
         credentials.apiKey
           ? (headers["x-api-key"] = credentials.apiKey)
           : (headers["Authorization"] = `Bearer ${credentials.accessToken}`);
-        // 0.5.165 (upstream 6aea3875) — real Claude Code sends x-claude-code-session-id
+        // 0.5.166 (upstream 6aea3875) — real Claude Code sends x-claude-code-session-id
         // equal to metadata.user_id's session_id. Derived from THIS request's body, so
         // no client's identity carries over to another (the 0.5.123 leak stays fixed).
         if ((credentials.accessToken || credentials.apiKey || "").includes("sk-ant-oat")) {

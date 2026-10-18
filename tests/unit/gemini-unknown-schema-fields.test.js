@@ -1,5 +1,5 @@
 /**
- * 0.5.165 (upstream aafe3002 + 09f6d395) — Gemini's schema proto has no field
+ * 0.5.166 (upstream aafe3002 + 09f6d395) — Gemini's schema proto has no field
  * for non-standard annotation keywords, and a single occurrence anywhere in a
  * tool schema rejects the whole request with
  * "Unknown name X: Cannot find field."

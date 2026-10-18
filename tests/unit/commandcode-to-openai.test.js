@@ -116,7 +116,7 @@ describe("commandcode-to-openai — finish", () => {
 });
 
 describe("commandcode-to-openai — error event", () => {
-  // 0.5.165 (upstream 092c84ea) — an error reaching the translator is mid-stream
+  // 0.5.166 (upstream 092c84ea) — an error reaching the translator is mid-stream
   // (a leading one is already a real HTTP status), so it must abort the stream
   // rather than become content with finish_reason:"stop". See
   // commandcode-mid-stream-error-is-not-a-clean-stop.test.js for the full case.

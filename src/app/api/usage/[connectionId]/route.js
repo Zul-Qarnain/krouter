@@ -17,7 +17,7 @@ function isAuthExpiredMessage(usage) {
   return AUTH_EXPIRED_PATTERNS.some((p) => msg.includes(p));
 }
 
-// 0.5.165 — set on the error thrown when the provider rejects the refresh token
+// 0.5.166 — set on the error thrown when the provider rejects the refresh token
 // for good, so background callers (token warmer) can stop retrying it.
 export const REFRESH_UNRECOVERABLE_CODE = "REFRESH_TOKEN_UNRECOVERABLE";
 
@@ -27,7 +27,7 @@ export const REFRESH_UNRECOVERABLE_CODE = "REFRESH_TOKEN_UNRECOVERABLE";
  * @returns Promise<{ connection, refreshed: boolean }>
  */
 export async function refreshAndUpdateCredentials(connection, force = false, proxyOptions = null) {
-  // 0.5.165 — the usage poll, quota auto-ping and token warmer each pass their
+  // 0.5.166 — the usage poll, quota auto-ping and token warmer each pass their
   // own snapshot. OpenAI rotates the Codex refresh token on every refresh and
   // revokes the session when a rotated one is reused, so work from the row as
   // stored right now, never the caller's copy (upstream 0bc7f86e).
@@ -60,7 +60,7 @@ export async function refreshAndUpdateCredentials(connection, force = false, pro
   // Use executor's refreshCredentials method (with optional proxy)
   const refreshResult = await executor.refreshCredentials(credentials, console, proxyOptions);
 
-  // 0.5.165 — a reused/revoked refresh token used to fall through as
+  // 0.5.166 — a reused/revoked refresh token used to fall through as
   // "refreshed" with the dead token; stop here and ask for re-auth (upstream 0bc7f86e).
   if (isUnrecoverableRefreshError(refreshResult)) {
     const error = new Error("Refresh token invalid or already used. Please re-authorize the connection.");

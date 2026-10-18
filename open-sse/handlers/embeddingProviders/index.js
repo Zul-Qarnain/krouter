@@ -1,7 +1,7 @@
 // Embeddings provider adapter registry
 import createOpenAIEmbeddingAdapter from "./openai.js";
 import gemini from "./gemini.js";
-// 0.5.165 — Copilot embeddings need the editor headers a bare bearer adapter
+// 0.5.166 — Copilot embeddings need the editor headers a bare bearer adapter
 // does not send, so github gets its own adapter. (upstream 51a1827e)
 import github from "./github.js";
 import openaiCompatNode from "./openaiCompatNode.js";

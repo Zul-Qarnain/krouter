@@ -25,7 +25,7 @@ const assistantSessionMap = new Map();
 // Server-generated item id prefixes that Codex /responses cannot resolve when store=false
 const SERVER_ID_PATTERN = /^(rs|fc|resp|msg)_/;
 
-// 0.5.165 — "Responses Lite": the request shape Codex 0.155 introduced for the
+// 0.5.166 — "Responses Lite": the request shape Codex 0.155 introduced for the
 // GPT-6 Sol/Luna family (upstream 95600db1). Those models are served behind an
 // internal header and want tools plus instructions as input prefix items instead
 // of top-level fields. Which ids need it is catalog data, so a new release only
@@ -66,7 +66,7 @@ const CODEX_PASSTHROUGH_TOOL_TYPES = new Set(["custom"]);
 // Allowlist of fields accepted by Codex Responses API — anything else is stripped
 const RESPONSES_API_ALLOWLIST = new Set([
   "model", "input", "instructions", "tools", "tool_choice", "stream", "store",
-  // 0.5.165 — parallel_tool_calls is part of the Responses Lite shape (upstream
+  // 0.5.166 — parallel_tool_calls is part of the Responses Lite shape (upstream
   // 95600db1). The legacy transport still deletes it below.
   "reasoning", "service_tier", "include", "prompt_cache_key", "client_metadata",
   "parallel_tool_calls"
@@ -83,7 +83,7 @@ function convertSystemToDeveloperRole(body) {
 }
 
 // Strip server-generated item IDs (rs_/fc_/resp_/msg_) from input — avoids 404 with store=false
-// 0.5.165 — except the developer msg_ ids of a request that already arrived in the
+// 0.5.166 — except the developer msg_ ids of a request that already arrived in the
 // Responses Lite shape: there they are part of the prefix the real Codex CLI
 // built, not a stored-item reference (upstream 95600db1).
 function stripStoredItemReferences(body, preserveLitePrefix = false) {
@@ -104,7 +104,7 @@ function stripStoredItemReferences(body, preserveLitePrefix = false) {
 function normalizeCodexTools(body) {
   if (!Array.isArray(body.tools)) return;
   const validNames = new Set();
-  // 0.5.165 — Codex's schema validator has no Unicode property escapes; a `pattern`
+  // 0.5.166 — Codex's schema validator has no Unicode property escapes; a `pattern`
   // carrying `\p{...}` 400s the whole request on every account (upstream 781c18d8).
   const patternStats = { removed: 0 };
   body.tools = body.tools.filter((tool) => {
@@ -143,7 +143,7 @@ function normalizeCodexTools(body) {
     // by strict Responses backends, and a client already speaking Responses format
     // bypasses the translator that would otherwise fill it in.
     if (parameters.type === "object" && !parameters.properties) parameters = { ...parameters, properties: {} };
-    // 0.5.165 — keep an explicit boolean strict flag; the rebuild below dropped it
+    // 0.5.166 — keep an explicit boolean strict flag; the rebuild below dropped it
     // (upstream 0dd4d6be).
     const strict = typeof tool.strict === "boolean" ? tool.strict : fn?.strict;
     for (const k of Object.keys(tool)) delete tool[k];
@@ -263,14 +263,14 @@ export class CodexExecutor extends BaseExecutor {
    */
   buildHeaders(credentials, stream = true, _url = null, model = null, body = null) {
     const headers = super.buildHeaders(credentials, stream);
-    // 0.5.165 — the GPT-6 Sol/Luna family is only served behind this header, and
+    // 0.5.166 — the GPT-6 Sol/Luna family is only served behind this header, and
     // only for a request actually in the Lite shape: hosted web_search cannot run
     // from a Lite input prefix, so transformRequest falls back to regular
     // Responses and leaves the tool at the top level (upstream 95600db1, 7bf93178).
     if (isCodexResponsesLiteModel(model && getModelUpstreamId("cx", model)) && !hasHostedWebSearch(body?.tools)) {
       headers["x-openai-internal-codex-responses-lite"] = "true";
     }
-    // 0.5.165 — the real codex CLI sends its version on every call, not just the
+    // 0.5.166 — the real codex CLI sends its version on every call, not just the
     // image one; a missing or stale identity is how gpt-6.1-sol got rejected
     // (upstream a7047a07, ca6e8407).
     if (!headers["version"]) headers["version"] = CODEX_CLI_VERSION;
@@ -456,7 +456,7 @@ export class CodexExecutor extends BaseExecutor {
     const normalized = normalizeResponsesInput(body.input);
     if (normalized) body.input = normalized;
 
-    // 0.5.165 — decide the transport before anything reshapes the body. Hosted
+    // 0.5.166 — decide the transport before anything reshapes the body. Hosted
     // web_search cannot be executed from a Responses Lite input prefix, so a
     // request that asks for it switches back to regular Responses and the tools a
     // previous Lite turn left in an additional_tools item are hoisted back to the
@@ -499,7 +499,7 @@ export class CodexExecutor extends BaseExecutor {
     body.stream = true;
 
     // If no instructions provided, inject default Codex instructions.
-    // 0.5.165 — not for Lite (the prefix below carries them), and not when a Lite
+    // 0.5.166 — not for Lite (the prefix below carries them), and not when a Lite
     // prefix was just hoisted out for hosted search: that request already has its
     // own developer instructions in body.input (upstream 95600db1, 7bf93178).
     if (!responsesLite && !convertedLitePrefix && (!body.instructions || body.instructions.trim() === "")) {
@@ -517,7 +517,7 @@ export class CodexExecutor extends BaseExecutor {
     // Map virtual Codex review models to the upstream Codex model before suffix parsing.
     body.model = upstreamModel;
 
-    // 0.5.165 — build the Lite prefix: tools and instructions move into input
+    // 0.5.166 — build the Lite prefix: tools and instructions move into input
     // items, the top-level fields go empty (upstream 95600db1).
     if (responsesLite) {
       const input = Array.isArray(body.input) ? body.input : [body.input];
@@ -559,7 +559,7 @@ export class CodexExecutor extends BaseExecutor {
     }
 
     // Priority: explicit reasoning.effort > reasoning_effort param > model suffix > default (medium)
-    // 0.5.165 — Lite defaults to medium, takes no summary and adds
+    // 0.5.166 — Lite defaults to medium, takes no summary and adds
     // context: "all_turns" (upstream 95600db1).
     if (!body.reasoning) {
       const raw = body.reasoning_effort || modelEffort || (responsesLite ? 'medium' : 'low');

@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 7111db35) — usage survives the claude -> openai -> responses pivot.
+// 0.5.166 (upstream 7111db35) — usage survives the claude -> openai -> responses pivot.
 import { describe, expect, it } from "vitest";
 
 import "../translator/registerAll.js";

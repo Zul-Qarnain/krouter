@@ -1,4 +1,4 @@
-// 0.5.165 (kRouter-own) — when every concurrency slot on an account is taken,
+// 0.5.166 (kRouter-own) — when every concurrency slot on an account is taken,
 // chatCore answers 503 "Account <id> busy, try another". That matched no error
 // rule, so markAccountUnavailable wrote the 30s transient default lock to the DB:
 // a burst of parallel IDE requests parked every account for 30s although the

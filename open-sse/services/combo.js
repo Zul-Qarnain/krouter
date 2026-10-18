@@ -294,7 +294,7 @@ export function reorderByCapabilities(models, required) {
     .map((x) => x.m);
 }
 
-// 0.5.165 — quota order may never cross the capability split. reorderByQuota over
+// 0.5.166 — quota order may never cross the capability split. reorderByQuota over
 // the whole list let a text-only member with quota data jump ahead of the member
 // that can read the request's image (no quota data sorts last), so the image was
 // stripped. Sort each tier on its own and keep capable members first.
@@ -307,7 +307,7 @@ function reorderByQuotaWithinCapability(models, required) {
 }
 
 /**
- * 0.5.165 (upstream 8f4e3800) — true when a 2xx completion carries nothing usable:
+ * 0.5.166 (upstream 8f4e3800) — true when a 2xx completion carries nothing usable:
  * no text, tool calls or reasoning, and no real finish (missing / in_progress /
  * incomplete). A real finish such as "length" or "stop" is the model's answer,
  * however empty. Only chat-completion and Claude message shapes are judged;
@@ -343,7 +343,7 @@ async function isZeroContentResult(result) {
   }
 }
 
-// 0.5.165 — Retry-After header (seconds or HTTP-date) as an ISO time, or null.
+// 0.5.166 — Retry-After header (seconds or HTTP-date) as an ISO time, or null.
 // The "all accounts parked" response puts the wait only there, not in the body.
 function retryAfterFromHeader(headers) {
   const raw = headers?.get?.("retry-after");
@@ -372,7 +372,7 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   }
 
   // Quota-aware ordering (0.5.27): float entries whose provider has the most
-  // remaining quota for that model to the front. 0.5.165 — only within the
+  // remaining quota for that model to the front. 0.5.166 — only within the
   // capability-compatible group and within the rest, so it never undoes the
   // capability sort above.
   if (autoSwitch) {
@@ -408,7 +408,7 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
 
       // Success (2xx) - return response
       if (result.ok) {
-        // 0.5.165 (upstream 8f4e3800) — a non-final seat that answered 200 with
+        // 0.5.166 (upstream 8f4e3800) — a non-final seat that answered 200 with
         // nothing usable falls through: a later member may answer for real. Only
         // non-streaming JSON is peeked; the final seat is always returned as-is.
         if (i < rotatedModels.length - 1 && await isZeroContentResult(result)) {
@@ -429,7 +429,7 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       } catch {
         // Ignore JSON parse errors
       }
-      // 0.5.165 — the "all accounts parked" response carries the wait only as a
+      // 0.5.166 — the "all accounts parked" response carries the wait only as a
       // Retry-After header, so a combo of parked members lost it. Body still wins.
       if (!retryAfter) retryAfter = retryAfterFromHeader(result.headers);
 
@@ -467,7 +467,7 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
         }
       }
 
-      // 0.5.165 — a request-scoped 4xx (upstream 20a43f5a) stops ACCOUNT failover
+      // 0.5.166 — a request-scoped 4xx (upstream 20a43f5a) stops ACCOUNT failover
       // only; the next combo member is a different model that may accept the
       // request, so the combo still advances (as it did before that change).
       if (!shouldFallback && !isModelNotFound && !requestScoped) {

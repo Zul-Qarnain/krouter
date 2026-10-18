@@ -1,4 +1,4 @@
-// 0.5.165 — Codex image requests cost real tokens and kRouter recorded none of
+// 0.5.166 — Codex image requests cost real tokens and kRouter recorded none of
 // them (upstream e10da160). The Responses stream ends with a response.completed
 // frame carrying the exact usage; parseStream threw it away because it only
 // looked for the image bytes, so an hour of image generation showed up as zero

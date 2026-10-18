@@ -1,5 +1,5 @@
 /**
- * 0.5.165 review follow-up to p1-oauth-refresh.
+ * 0.5.166 review follow-up to p1-oauth-refresh.
  *
  * The token warmer learned to stop after a refresh token is rejected
  * (deadRefreshTokens + REFRESH_UNRECOVERABLE_CODE), but quota auto-ping did not -

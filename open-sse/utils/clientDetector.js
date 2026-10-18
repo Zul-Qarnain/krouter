@@ -8,7 +8,7 @@ const NATIVE_PAIRS = {
   "claude": ["claude", "anthropic"],
   "gemini-cli": ["gemini-cli"],
   "antigravity": ["antigravity"],
-  // 0.5.165 — codex only. Passthrough skips translation, and only the codex
+  // 0.5.166 — codex only. Passthrough skips translation, and only the codex
   // provider takes a Responses body: "openai" posted it to /v1/chat/completions
   // (needs messages[]) and "commandcode" to /alpha/generate (needs params.messages).
   "codex": ["codex"],

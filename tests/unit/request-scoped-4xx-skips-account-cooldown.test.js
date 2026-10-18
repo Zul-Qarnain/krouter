@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 20a43f5a) — an unmatched 4xx is caused by the request
+// 0.5.166 (upstream 20a43f5a) — an unmatched 4xx is caused by the request
 // (malformed body, unsupported parameter, validation), not by the credential.
 // It used to fall through to the 30s transient default: the account (model) was
 // locked and, with one connection, every request in that window failed with a

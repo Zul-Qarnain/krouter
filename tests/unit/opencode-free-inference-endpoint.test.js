@@ -1,4 +1,4 @@
-// 0.5.165 — OpenCode Free (oc) answered every request with 403 FreeTierError.
+// 0.5.166 — OpenCode Free (oc) answered every request with 403 FreeTierError.
 // kRouter still posted the v1 shape: https://opencode.ai/zen/v1/chat/completions with
 // `Bearer public` and `x-opencode-client: desktop` and nothing else. Live probes on
 // 2026-10-18 (the tier needs no account, so this is reproducible):

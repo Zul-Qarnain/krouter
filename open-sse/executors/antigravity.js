@@ -170,7 +170,7 @@ export class AntigravityExecutor extends BaseExecutor {
       });
       return { ...c, role, parts: parts || [] };
     });
-    // 0.5.165 — the role rewrite above creates adjacent same-role turns and the
+    // 0.5.166 — the role rewrite above creates adjacent same-role turns and the
     // thought strip can empty a turn's parts; Google answers 400
     // INVALID_ARGUMENT for both, and for a history that ends on a model turn or
     // an unanswered functionCall. Normalize AFTER the strip (upstream e7b5f09d).
@@ -279,7 +279,7 @@ export class AntigravityExecutor extends BaseExecutor {
     // Matches what the real Antigravity native client picks based on token.
     const envelopeUA = getAntigravityEnvelopeUserAgent(credentials);
 
-    // 0.5.165 — the official Antigravity client omits `requestType` entirely on
+    // 0.5.166 — the official Antigravity client omits `requestType` entirely on
     // the agent (chat) path. Sending `requestType: "agent"` — set here, or leaked
     // through the ...body spread below from an inbound IDE/MITM envelope — makes
     // Google bucket the request and answer a detail-free 429 RESOURCE_EXHAUSTED

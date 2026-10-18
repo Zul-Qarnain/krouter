@@ -421,7 +421,7 @@ describe("wrapQoderSSE", () => {
   // Regression for review finding #3: chunks could leak past [DONE] when
   // the success branch had no doneEmitted guard. We synthesize an error
   // envelope (which sets doneEmitted=true) followed by a valid envelope
-  // and assert the second envelope is NOT forwarded. 0.5.165 — the error
+  // and assert the second envelope is NOT forwarded. 0.5.166 — the error
   // envelope now has to follow a content frame, because a first-frame error
   // becomes an HTTP failure instead (upstream 782c137b).
   it("does not forward chunks after [DONE] has been emitted", async () => {
@@ -456,7 +456,7 @@ describe("wrapQoderSSE", () => {
     expect(() => JSON.parse(dataLine.slice("data: ".length))).not.toThrow();
   });
 
-  // 0.5.165 — a first-frame error envelope is an HTTP failure now, so chatCore
+  // 0.5.166 — a first-frame error envelope is an HTTP failure now, so chatCore
   // can lock the connection and fall back instead of recording the error text
   // as a finished completion (upstream 782c137b).
   it("upstream first-frame error envelope produces an HTTP error", async () => {

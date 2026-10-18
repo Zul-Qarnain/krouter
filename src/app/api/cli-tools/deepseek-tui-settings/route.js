@@ -133,7 +133,7 @@ export async function POST(request) {
         const dir = getDeepSeekDir();
         await fs.mkdir(dir, { recursive: true });
 
-        // 0.5.165 — never write the sk_krouter placeholder; it 401s under requireApiKey (upstream 06eda8b0).
+        // 0.5.166 — never write the sk_krouter placeholder; it 401s under requireApiKey (upstream 06eda8b0).
         const newConfig = buildKRouterConfig(baseUrl, await resolveCliApiKey(apiKey), model);
         await fs.writeFile(getDeepSeekConfigPath(), newConfig);
 

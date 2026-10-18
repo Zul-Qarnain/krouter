@@ -59,7 +59,7 @@ export class GeminiCLIExecutor extends BaseExecutor {
         for (const d of details) {
           if (d?.["@type"] === "type.googleapis.com/google.rpc.RetryInfo" && d?.retryDelay) {
             base.retryAfter = d.retryDelay;
-            // 0.5.165 — also as resetsAtMs: retryAfter alone reached no lock, so
+            // 0.5.166 — also as resetsAtMs: retryAfter alone reached no lock, so
             // markAccountUnavailable fell back to generic backoff (capped at 6h there).
             const delayMs = retryDelayMs(d.retryDelay);
             if (delayMs) base.resetsAtMs = Date.now() + delayMs;

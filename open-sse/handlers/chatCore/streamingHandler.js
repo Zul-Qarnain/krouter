@@ -52,7 +52,7 @@ export function handleStreamingResponse({ providerResponse, provider, model, sou
   // Terminal bytes for a stream that aborts after HTTP 200 was sent, so the client
   // sees a real error instead of a silently truncated reply. Responses passthrough
   // keeps its response.failed shape.
-  // 0.5.165 — every other client format used to get nothing; now it gets the OpenAI
+  // 0.5.166 — every other client format used to get nothing; now it gets the OpenAI
   // error frame + [DONE], or `event: error` for Claude (upstream 93001213).
   const isResponsesPassthrough = sourceFormat === FORMATS.OPENAI_RESPONSES && targetFormat === FORMATS.OPENAI_RESPONSES;
   const onAbortTerminal = isResponsesPassthrough

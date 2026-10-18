@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 781c18d8) — Codex's /responses schema validator has no
+// 0.5.166 (upstream 781c18d8) — Codex's /responses schema validator has no
 // Unicode property escapes. A tool `pattern` carrying `\p{...}` (valid ECMAScript
 // u-mode) gets 400 "Invalid schema for function ... is not a 'regex'" on every
 // account, which costs a full combo failover each turn. Only those `pattern` keys

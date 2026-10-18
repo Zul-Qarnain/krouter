@@ -1,4 +1,4 @@
-// 0.5.165 (upstream b65d2d0a + b54a3f9b) — the OAuth cloak renames client tools to
+// 0.5.166 (upstream b65d2d0a + b54a3f9b) — the OAuth cloak renames client tools to
 // "<tool>_ide". When the suffixed -> original map is missing for a response (a
 // retried or reconnected stream), decloak returned early and the client received
 // "<tool>_ide", a name it cannot resolve. Fall back to stripping the suffix. The

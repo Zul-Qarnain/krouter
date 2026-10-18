@@ -82,7 +82,7 @@ export async function POST(request) {
     } catch { /* No existing config */ }
 
     const endpointUrl = `${baseUrl}/chat/completions#models.ai.azure.com`;
-    // 0.5.165 — never write the sk_krouter placeholder; it 401s under requireApiKey (upstream 06eda8b0).
+    // 0.5.166 — never write the sk_krouter placeholder; it 401s under requireApiKey (upstream 06eda8b0).
     const keyToUse = await resolveCliApiKey(apiKey);
 
     const newEntry = {

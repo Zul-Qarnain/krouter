@@ -77,7 +77,7 @@ export default function ConnectionRow({ connection, proxyPools, health = null, i
     : (connection.name || connection.email || connection.displayName || "API Key");
 
   // Use useState + useEffect for impure Date.now() to avoid calling during render
-  // 0.5.165 — count down to the LATEST lock still running. The earliest raw value
+  // 0.5.166 — count down to the LATEST lock still running. The earliest raw value
   // could be an expired key (only a success clears those), which hid an active
   // month-long account hold's countdown.
   const [cooldownUntil, setCooldownUntil] = useState(null);

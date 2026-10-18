@@ -34,7 +34,7 @@ const g = (global.__quotaAutoPing ??= {
   resetCache: {},          // key `${provider}:${connId}` -> last-seen resetAt
   disabledUntil: {},       // claude only — billing-disabled skip window
   loggedDisabledReason: {},
-  // 0.5.165 — connId -> the refresh token the provider rejected. Auto-ping is the
+  // 0.5.166 — connId -> the refresh token the provider rejected. Auto-ping is the
   // writer upstream blames for the logouts: without this it re-POSTed a revoked
   // token every tick, forever. Keyed on the token, so a reconnect resumes by itself.
   deadRefreshTokens: new Map(),
@@ -165,7 +165,7 @@ async function pingConnection(handler, conn) {
   const proxyCfg = await resolveConnectionProxyConfig(conn.providerSpecificData);
   const proxyOptions = buildProxyOptions(proxyCfg);
 
-  // 0.5.165 — a refresh token the provider already rejected needs the user, not
+  // 0.5.166 — a refresh token the provider already rejected needs the user, not
   // another POST every tick (mirrors tokenWarmer).
   if (conn.refreshToken && g.deadRefreshTokens.get(conn.id) === conn.refreshToken) return;
 

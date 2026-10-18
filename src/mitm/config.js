@@ -58,7 +58,7 @@ function isChatRequest(tool, req) {
 }
 
 // Synonym map: rawModel from request → canonical alias key in mitmAlias DB
-// 0.5.165 — repointed at the 3.8 ladder (upstream 24034f69). Google retired the
+// 0.5.166 — repointed at the 3.8 ladder (upstream 24034f69). Google retired the
 // 3.5 Flash tiers and gemini-3-flash-agent, but IDE builds in the field still send
 // those ids, so the keys stay and the targets move to live models.
 const MODEL_SYNONYMS = {
@@ -84,7 +84,7 @@ const MODEL_PATTERNS = {
     { match: /flash.*agent|agent.*flash|flash/i,                   alias: "gemini-3.8-flash-high" },
     { match: /pro.*low|low.*pro/i,                                 alias: "gemini-3.1-pro-low" },
     { match: /gemini.*pro|pro.*gemini/i,                           alias: "gemini-pro-agent" },
-    // 0.5.165 — 5.5 before the 4.6 catch-alls, so an IDE asking for Opus 5.5 does
+    // 0.5.166 — 5.5 before the 4.6 catch-alls, so an IDE asking for Opus 5.5 does
     // not silently land on Opus 4.6 (upstream 24034f69, a07ed95b).
     { match: /opus.*5[.-]5.*high|5[.-]5.*opus.*high/i,             alias: "claude-opus-5-5-high" },
     { match: /opus.*5[.-]5.*medium|5[.-]5.*opus.*medium/i,         alias: "claude-opus-5-5-medium" },

@@ -344,7 +344,7 @@ describe("Kiro terminal integrity recovery", () => {
     const retryBody = JSON.parse(fetchMock.mock.calls[1][1].body);
 
     expect(body).toContain("Recovered safely.");
-    // 0.5.165 — the repair instruction rides in the user turn: kiro.dev rejects a
+    // 0.5.166 — the repair instruction rides in the user turn: kiro.dev rejects a
     // top-level systemPrompt with 400 REQUEST_BODY_INVALID (upstream 1892ed77).
     const retryContent = retryBody.conversationState.currentMessage.userInputMessage.content;
     expect(retryBody.systemPrompt).toBeUndefined();

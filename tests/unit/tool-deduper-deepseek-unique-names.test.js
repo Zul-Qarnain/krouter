@@ -1,4 +1,4 @@
-// 0.5.165 — DeepSeek answers 400 "Tool names must be unique" on every endpoint
+// 0.5.166 — DeepSeek answers 400 "Tool names must be unique" on every endpoint
 // that serves it (api.deepseek.com, OpenCode Go, LiteLLM gateways). dedupeTools
 // now also drops later same-name tools for any deepseek-* model, first wins
 // (upstream 7f5bd155, tests ported from its tool-deduper.test.js; the live

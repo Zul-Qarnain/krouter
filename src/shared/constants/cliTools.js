@@ -8,7 +8,7 @@ export const MITM_TOOLS = {
     description: "Google Antigravity IDE with MITM",
     configType: "mitm",
     mitmDomain: "daily-cloudcode-pa.googleapis.com",
-    // 0.5.165 — Google retired the 3.5 Flash tiers, gemini-3-flash-agent and the
+    // 0.5.166 — Google retired the 3.5 Flash tiers, gemini-3-flash-agent and the
     // gemini-3-flash command model (upstream 24034f69). The mandatory Default slot
     // pointed at gemini-3.5-flash-low, so a fresh MITM setup mapped the IDE's
     // primary turn onto a model that no longer answers.
@@ -77,7 +77,7 @@ export const MITM_TOOLS = {
     mitmDomain: "runtime.us-east-1.kiro.dev",
     defaultModels: [
       { id: "auto", name: "Auto (Kiro agent default)", alias: "auto" },
-      // 0.5.165 — Kiro's picker offers Claude Sonnet 5 (upstream cliTools kiro slot);
+      // 0.5.166 — Kiro's picker offers Claude Sonnet 5 (upstream cliTools kiro slot);
       // without a slot getMappedModel returns null and that turn is passed through
       // to AWS instead of the provider the user mapped.
       { id: "claude-sonnet-5", name: "Claude Sonnet 5", alias: "claude-sonnet-5" },
@@ -398,7 +398,7 @@ amp --model "{{model}}"
     defaultModels: [
       { id: "claude-opus-4-7", name: "Claude Opus 4.7", alias: "opus", defaultValue: "cc/claude-opus-4-7" },
       { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", alias: "sonnet", defaultValue: "cc/claude-sonnet-4-6" },
-      // 0.5.165 — cx/gpt-5.5 was retired by OpenAI (upstream 7878f53b); the preset
+      // 0.5.166 — cx/gpt-5.5 was retired by OpenAI (upstream 7878f53b); the preset
       // handed jcode a model that answers 400.
       { id: "gpt-6.1-sol", name: "GPT 6.1 Sol", alias: "gpt5", defaultValue: "cx/gpt-6.1-sol" },
       { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro", alias: "gemini", defaultValue: "gemini/gemini-3.1-pro" },

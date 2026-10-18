@@ -1,4 +1,4 @@
-// 0.5.165 — a chat upstream translated for a Responses client (Codex CLI) must bill
+// 0.5.166 — a chat upstream translated for a Responses client (Codex CLI) must bill
 // the request when response.completed goes out. Codex closes the socket on that
 // event, which cancels the reader, so flush() -- the only place this route used to
 // record usage -- never runs. The same-format Responses path already bills at its

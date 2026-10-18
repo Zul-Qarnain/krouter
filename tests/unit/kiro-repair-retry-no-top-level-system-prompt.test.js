@@ -1,5 +1,5 @@
 /**
- * 0.5.165 — the integrity repair retry must never write a top-level
+ * 0.5.166 — the integrity repair retry must never write a top-level
  * `systemPrompt` (upstream 1892ed77). kiro.dev answers any body carrying that
  * field with a terminal 400 REQUEST_BODY_INVALID, so every repair retry
  * (malformed tool_call, ellipsis-only, short future-action final) was a hard

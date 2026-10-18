@@ -1,4 +1,4 @@
-// 0.5.165 — the key a CLI tool's Apply writes into that tool's config (upstream 06eda8b0).
+// 0.5.166 — the key a CLI tool's Apply writes into that tool's config (upstream 06eda8b0).
 // The cards send the literal "sk_krouter" (or nothing) when no key is picked, and the
 // routes used to write that placeholder through. It is not a dashboard key, so every
 // request from the tool got 401 "Invalid API key" whenever requireApiKey is on (every

@@ -1,7 +1,7 @@
 import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, ACCOUNT_VERIFY_COOLDOWN_MS } from "../config/errorConfig.js";
 import { resolveProviderAlias } from "./model.js";
 
-// 0.5.165 — statuses that speak about the credential. Any other 4xx no rule
+// 0.5.166 — statuses that speak about the credential. Any other 4xx no rule
 // claims was caused by the request itself (upstream 20a43f5a).
 const ACCOUNT_SCOPED_4XX = new Set([401, 402, 403, 429]);
 // Executors whose 4xx status says nothing about the cause: cursor.js reports every
@@ -33,7 +33,7 @@ export function checkFallbackError(status, errorText, backoffLevel = 0, provider
   const lowerError = errorText
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()
     : "";
-  // 0.5.165 — provider-scoped rules (upstream 9f41ee75); accept "cx" as well as "codex".
+  // 0.5.166 — provider-scoped rules (upstream 9f41ee75); accept "cx" as well as "codex".
   const providerId = provider ? resolveProviderAlias(provider) : null;
 
   for (const rule of ERROR_RULES) {
@@ -66,7 +66,7 @@ export function checkFallbackError(status, errorText, backoffLevel = 0, provider
     }
   }
 
-  // 0.5.165 — a 4xx no rule above claimed is about the request (malformed body,
+  // 0.5.166 — a 4xx no rule above claimed is about the request (malformed body,
   // unsupported parameter, validation), not the credential (upstream 20a43f5a).
   // The old 30s default locked a healthy account, and with one connection every
   // request in that window failed with a copy of this error. No lock, no account
@@ -175,7 +175,7 @@ export function getEarliestModelLockUntil(connection) {
 }
 
 /**
- * 0.5.165 — latest modelLock_* expiry still in the future, or null. The connection
+ * 0.5.166 — latest modelLock_* expiry still in the future, or null. The connection
  * card counts down to it: the earliest raw value can be an expired key (only a
  * success clears those), which hid an active month-long account hold's countdown.
  * @param {object|null} connection

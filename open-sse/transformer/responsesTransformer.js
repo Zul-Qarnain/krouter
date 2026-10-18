@@ -333,7 +333,7 @@ export function createResponsesApiTransformStream(logger = null) {
 
           // Regular text content
           if (content) {
-            // 0.5.165 — the answer starts, so thinking is over: reasoning_content
+            // 0.5.166 — the answer starts, so thinking is over: reasoning_content
             // upstreams never send "</think>" (upstream 5d2cfbf3).
             closeReasoning(controller);
             if (!state.msgItemAdded[idx]) {
@@ -373,10 +373,10 @@ export function createResponsesApiTransformStream(logger = null) {
           }
         }
 
-        // Handle tool_calls. 0.5.165 — require a real call (an empty array is truthy),
+        // Handle tool_calls. 0.5.166 — require a real call (an empty array is truthy),
         // now that this also closes reasoning; same guard as the translator (10a923da).
         if (delta.tool_calls?.length) {
-          closeReasoning(controller); // 0.5.165 — same as text (upstream 5d2cfbf3)
+          closeReasoning(controller); // 0.5.166 — same as text (upstream 5d2cfbf3)
           closeMessage(controller, idx);
 
           for (const tc of delta.tool_calls) {

@@ -1,4 +1,4 @@
-// 0.5.165 (kRouter-own) — the quota sort ran over the WHOLE combo list after the
+// 0.5.166 (kRouter-own) — the quota sort ran over the WHOLE combo list after the
 // capability sort, so a text-only member with quota data jumped ahead of the
 // member that can read the request's image (unknown quota sorts last). The
 // image was then stripped at the text-only model. Capability is now a hard

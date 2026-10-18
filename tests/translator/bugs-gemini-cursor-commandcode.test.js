@@ -62,7 +62,7 @@ describe("OpenAI → CommandCode", () => {
     expect(Object.keys(call.input).length, "arguments silently dropped to {}").toBeGreaterThan(0);
   });
 
-  // 0.5.165 (upstream 13b468b8) — fixed: images become native CommandCode blocks.
+  // 0.5.166 (upstream 13b468b8) — fixed: images become native CommandCode blocks.
   it("image content is preserved as native CommandCode image blocks", () => {
     const out = O2CC({
       messages: [{ role: "user", content: [

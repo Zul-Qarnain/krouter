@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 4ad1e7a4) — Anthropic stopped shipping model-scoped weekly
+// 0.5.166 (upstream 4ad1e7a4) — Anthropic stopped shipping model-scoped weekly
 // windows as `seven_day_<model>` keys. Fable (and any future scoped model)
 // arrives inside `limits[]` as
 //   { kind: "weekly_scoped", percent, resets_at, scope: { model: { display_name } } }

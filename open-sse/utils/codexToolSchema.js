@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 781c18d8) — Codex-specific tool JSON Schema compatibility.
+// 0.5.166 (upstream 781c18d8) — Codex-specific tool JSON Schema compatibility.
 //
 // `https://chatgpt.com/backend-api/codex/responses` validates every function
 // tool's `parameters` with a regex engine that has no Unicode property escapes.

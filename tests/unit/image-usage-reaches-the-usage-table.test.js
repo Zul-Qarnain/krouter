@@ -1,4 +1,4 @@
-// 0.5.165 — the image endpoint never wrote a usage row, so every /v1/images
+// 0.5.166 — the image endpoint never wrote a usage row, so every /v1/images
 // request was free as far as the dashboard was concerned (upstream e10da160).
 // Codex now reports exact token counts on response.completed; the handler has to
 // turn that into a saveRequestUsage row attributed to the connection, the API key

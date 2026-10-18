@@ -1,4 +1,4 @@
-// 0.5.165 — Codex refresh-token reuse must never happen (upstream 0bc7f86e).
+// 0.5.166 — Codex refresh-token reuse must never happen (upstream 0bc7f86e).
 //
 // OpenAI rotates the Codex refresh token on every refresh and revokes the whole
 // session when an already-rotated token is presented again. Three background

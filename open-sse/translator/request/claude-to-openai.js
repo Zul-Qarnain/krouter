@@ -2,7 +2,7 @@ import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { adjustMaxTokens } from "../helpers/maxTokensHelper.js";
 
-// 0.5.165 — tool text when a tool_result carried only images; never empty (some
+// 0.5.166 — tool text when a tool_result carried only images; never empty (some
 // OpenAI-compatible validators reject an empty tool message) and never base64.
 const TOOL_RESULT_IMAGE_PLACEHOLDER = "(image attached below)";
 
@@ -188,7 +188,7 @@ function convertClaudeMessage(msg) {
             tool_call_id: block.tool_use_id,
             content: resultContent
           });
-          // 0.5.165 — the OpenAI tool role is text-only, so a screenshot an MCP tool
+          // 0.5.166 — the OpenAI tool role is text-only, so a screenshot an MCP tool
           // returned was JSON-stringified into the tool text as base64. Hand it to
           // the model in the user message that follows the tool messages, tagged
           // with the call it came from (upstream f4f06f29).

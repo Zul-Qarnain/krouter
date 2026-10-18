@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 122f23ee, envelope half) — Cline (api.cline.bot) wraps a
+// 0.5.166 (upstream 122f23ee, envelope half) — Cline (api.cline.bot) wraps a
 // non-streaming chat completion in {"success":true,"data":{...choices...}}. kRouter
 // handed that envelope straight back, so clients found no top-level `choices` and the
 // dashboard model test said "Provider returned no completion choices for this model".

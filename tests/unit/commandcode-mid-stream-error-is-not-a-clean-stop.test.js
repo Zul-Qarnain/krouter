@@ -1,10 +1,10 @@
-// 0.5.165 (upstream 092c84ea) — two halves of the same failure.
+// 0.5.166 (upstream 092c84ea) — two halves of the same failure.
 //
 // 1. A `type:"error"` event that arrives AFTER content started flowing was turned
 //    into assistant content plus finish_reason:"stop". HTTP 200 was already sent,
 //    so the client saw a half-written answer that looked finished and cached it.
 //    Now the translator throws, and the stream handler's in-band terminal frame
-//    (0.5.165 p2-stream-abort) reports the abort to the client instead.
+//    (0.5.166 p2-stream-abort) reports the abort to the client instead.
 //    The leading-error case is unaffected: inspectAndWrapCommandCodeResponse
 //    still converts it to a real HTTP status before the stream is committed.
 //

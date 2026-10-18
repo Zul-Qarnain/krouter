@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 1d4335d4) — a Claude client asking for JSON from a provider
+// 0.5.166 (upstream 1d4335d4) — a Claude client asking for JSON from a provider
 // kRouter must stream (Codex, grok-cli, any Responses-API upstream) got a
 // chat.completion back from the Responses branch of handleForcedSSEToJson. The chat
 // branch was fixed in 0.5.163; this covers the Responses branch.

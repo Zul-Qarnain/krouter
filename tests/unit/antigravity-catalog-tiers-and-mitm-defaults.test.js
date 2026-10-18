@@ -1,4 +1,4 @@
-// 0.5.165 — the ag catalog was still the 2026-08 lineup.
+// 0.5.166 — the ag catalog was still the 2026-08 lineup.
 //
 // Google removed the Gemini 3.5 Flash tiers, gemini-3-flash-agent and the
 // gemini-3-flash command model on 2026-10-08 (upstream 24034f69, "remove

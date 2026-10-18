@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 273f0c32) — response.completed carries the finished Response
+// 0.5.166 (upstream 273f0c32) — response.completed carries the finished Response
 // object, so response.output has to repeat the items already delivered in
 // response.output_item.done. Clients that build their final result from the
 // terminal event (GitHub Copilot CLI, the OpenAI SDK "final response" helpers)

@@ -64,7 +64,7 @@ export function extractUsageFromResponse(responseBody) {
     };
   }
 
-  // 0.5.165 — Ollama non-streaming (stream:false /api/chat) puts the counts at the
+  // 0.5.166 — Ollama non-streaming (stream:false /api/chat) puts the counts at the
   // top level, not under `usage`. With no branch here those requests recorded no
   // usage row at all. prompt_eval_cached_count is a cache-read subset of
   // prompt_eval_count (cache-INCLUSIVE) (upstream 46627249).

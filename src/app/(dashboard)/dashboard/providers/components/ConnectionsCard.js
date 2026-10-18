@@ -277,7 +277,7 @@ function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, on
         </div>
         <Select label="Proxy Pool" value={formData.proxyPoolId} onChange={(e) => setFormData({ ...formData, proxyPoolId: e.target.value })}
           options={[{ value: NONE, label: "None" }, ...(proxyPools || []).map((p) => ({ value: p.id, label: p.name }))]} />
-        {/* 0.5.165 — POST /api/providers now answers 409 for a name already in the
+        {/* 0.5.166 — POST /api/providers now answers 409 for a name already in the
             pool instead of overwriting the stored key, so the modal has to say so. */}
         {saveError && (
           <p className="text-xs text-red-500" role="alert">{saveError}</p>
@@ -398,7 +398,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
     try {
       const res = await fetch("/api/providers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerId, ...formData }) });
       if (res.ok) { await fetch_(); setShowAddModal(false); return; }
-      // 0.5.165 — a silent no-op here read as a frozen modal; show what the API said.
+      // 0.5.166 — a silent no-op here read as a frozen modal; show what the API said.
       const data = await res.json().catch(() => ({}));
       setAddKeyError(data?.error || `Could not add the key (HTTP ${res.status}).`);
     } catch (e) {

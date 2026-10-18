@@ -6,7 +6,7 @@ import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
 
-// 0.5.165 — the card refetches this after Apply; it must never be served from a cache.
+// 0.5.166 — the card refetches this after Apply; it must never be served from a cache.
 // "use server" is gone: a Server Action file may export only async functions, so it
 // could not carry this flag, and a Route Handler runs on the server anyway (upstream 8f20daac).
 export const dynamic = "force-dynamic";
@@ -86,7 +86,7 @@ const hasKRouterConfig = (config) => {
     || config.includes(`[model_providers.${PROVIDER_KEY}]`);
 };
 
-// 0.5.165 — the provider Codex actually uses: model_provider -> [model_providers.<name>].
+// 0.5.166 — the provider Codex actually uses: model_provider -> [model_providers.<name>].
 // The card used to take the first base_url in the file, and Apply appends the krouter
 // table after any provider already there, so a working setup showed another router's
 // URL and "Other" (upstream 8f20daac). Parsed here with confbox so inline tables work

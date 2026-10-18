@@ -9,7 +9,7 @@ import { responsesToChatResponse } from "../utils/responsesToChatStream.js";
 /**
  * OpenCode Free (oc).
  *
- * 0.5.165 (upstream 5bdcd5e7, e964e482) — the free tier moved off /zen/v1 and now
+ * 0.5.166 (upstream 5bdcd5e7, e964e482) — the free tier moved off /zen/v1 and now
  * gates on the OpenCode v2 CLI's fingerprint. Live probes on 2026-10-18 (the tier is
  * `Bearer public`, so no account is involved) pin down what the gate actually reads:
  *

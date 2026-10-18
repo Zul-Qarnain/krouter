@@ -45,7 +45,7 @@ export const QODER_MODEL_MAP = {
   efficient: "efficient",
   lite: "lite",
   // Frontier models
-  // 0.5.165 (upstream 2ab6a4c9) — gm51model is gone from the server catalog;
+  // 0.5.166 (upstream 2ab6a4c9) — gm51model is gone from the server catalog;
   // qmodel_38max / qfmodel / gmodel / gfmodel are new.
   qmodel: "qmodel",
   qfmodel: "qfmodel",

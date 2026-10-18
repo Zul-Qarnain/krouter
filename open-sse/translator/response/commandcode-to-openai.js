@@ -178,13 +178,13 @@ export function convertCommandCodeToOpenAI(chunk, state) {
       break;
     }
     case "error": {
-      // 0.5.165 (upstream 092c84ea) — a `type:"error"` that reaches the translator
+      // 0.5.166 (upstream 092c84ea) — a `type:"error"` that reaches the translator
       // arrived mid-stream: inspectAndWrapCommandCodeResponse() already converted a
       // leading one into a real HTTP status. HTTP 200 and some content are out the
       // door, so emitting the text with finish_reason:"stop" made a truncated reply
       // look finished, and clients cached it. Throwing errors the response stream;
       // the stream handler turns that into the client's in-band terminal error frame
-      // (0.5.165 p2-stream-abort) rather than a fake clean stop.
+      // (0.5.166 p2-stream-abort) rather than a fake clean stop.
       const errVal = event.error ?? event.message ?? "unknown";
       const errStr = typeof errVal === "string" ? errVal : JSON.stringify(errVal);
       throw new Error(`[CommandCode error: ${errStr}]`);

@@ -254,7 +254,7 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
     .pipeThrough(upstreamTap)
     .pipeThrough(transformStream);
 
-  // 0.5.165 — hand onAbortTerminal a readable reason so the client's error frame
+  // 0.5.166 — hand onAbortTerminal a readable reason so the client's error frame
   // says why the stream ended (upstream 93001213). kRouter also passes a non-network
   // error's own message (e.g. an executor's mid-stream throw, upstream 092c84ea)
   // rather than calling it a lost connection.

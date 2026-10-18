@@ -111,7 +111,7 @@ function normalizeExpiresAt(expiresAt) {
 }
 
 /**
- * 0.5.165 — return a copy of `creds` holding the token set from `stored` when
+ * 0.5.166 — return a copy of `creds` holding the token set from `stored` when
  * `stored` (health cache or DB row) was refreshed or expires later. Only token
  * fields move: `creds.providerSpecificData` carries the request's resolved proxy
  * fields (auth.js), which the stored row does not have (upstream 0bc7f86e).
@@ -182,7 +182,7 @@ function _refreshProjectId(provider, connectionId, accessToken) {
   // Evict the stale cached entry so getProjectIdForConnection does a real fetch
   invalidateProjectId(connectionId);
 
-  // 0.5.165 — lazy by default: re-fetching (loadCodeAssist, maybe onboardUser)
+  // 0.5.166 — lazy by default: re-fetching (loadCodeAssist, maybe onboardUser)
   // after every refresh, for several accounts at once, trips Google's
   // anti-abuse limiter (upstream 1442cc73).
   if (process.env.EAGER_PROJECT_ID_REFRESH !== "true") return;
@@ -289,7 +289,7 @@ export async function checkAndRefreshToken(provider, credentials) {
   // token in the last ~10s, the health cache holds the fresh value. Consult it
   // BEFORE we touch the network. Saves a full OAuth round trip when multiple
   // IDE requests fire in parallel against the same account.
-  // 0.5.165 — adopt any newer cached token set, even one inside the refresh
+  // 0.5.166 — adopt any newer cached token set, even one inside the refresh
   // lead: refreshing from the older snapshot would present a rotated refresh
   // token. Keep the request's providerSpecificData (resolved proxy fields).
   if (creds.connectionId && creds.connectionId !== "noauth") {
@@ -298,7 +298,7 @@ export async function checkAndRefreshToken(provider, credentials) {
     } catch { /* cache miss is fine; fall through to normal path */ }
   }
 
-  // 0.5.165 — about to refresh: the cache can trail another writer (usage
+  // 0.5.166 — about to refresh: the cache can trail another writer (usage
   // poll, auto-ping, warmer) by up to 10 s, so re-read the DB row first and
   // skip the refresh when that writer already did it (upstream 0bc7f86e).
   if (_shouldRefreshCredentials(provider, creds)) {

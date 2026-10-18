@@ -296,7 +296,7 @@ async function handleCreateCombo() {
       continue;
     }
     
-    // 0.5.165 — save the "provider/model" string, not the /api/models record,
+    // 0.5.166 — save the "provider/model" string, not the /api/models record,
     // or the combo holds objects the router cannot resolve (upstream b677bfce).
     const modelId = comboModelId(availableModels[num - 1]);
     if (!modelId) {

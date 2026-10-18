@@ -3,7 +3,7 @@ import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.j
 import { reorderByCapabilities } from "../../open-sse/services/combo.js";
 import { augmentModelsWithCapacityAdapter } from "../../open-sse/services/capacityAdapter.js";
 
-// 0.5.165 (upstream batch p2-caps) — capability rows that misrouted requests.
+// 0.5.166 (upstream batch p2-caps) — capability rows that misrouted requests.
 // Image requests to vision models were judged unsatisfiable (so the vision pool
 // went in front of them), Claude was treated as unable to read PDFs, and
 // /v1/models published windows far below (or, after a pattern fix, above) what

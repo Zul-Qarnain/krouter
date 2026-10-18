@@ -37,7 +37,7 @@ const g = (global.__krouterTokenWarmer ??= {
   interval: null,
   lastRefreshedAt: new Map(), // connectionId -> ms epoch
 });
-// 0.5.165 — connectionId -> refresh token the provider rejected for good.
+// 0.5.166 — connectionId -> refresh token the provider rejected for good.
 // Skipped until the row holds a different one (the user re-authorized).
 g.deadRefreshTokens ??= new Map();
 
@@ -117,7 +117,7 @@ async function tick() {
     due.map(async (conn) => {
       g.lastRefreshedAt.set(conn.id, Date.now());
       try {
-        // 0.5.165 — the proxy config lives in providerSpecificData; passing the
+        // 0.5.166 — the proxy config lives in providerSpecificData; passing the
         // whole row resolved no proxy, so warm-up refreshes left over the real IP.
         const proxyCfg = await resolveConnectionProxyConfig(conn.providerSpecificData || {}).catch(() => null);
         await refreshAndUpdateCredentials(conn, false, buildProxyOptions(proxyCfg));

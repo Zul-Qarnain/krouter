@@ -221,7 +221,7 @@ export class BaseExecutor {
       // 0.5.123 (upstream 13ed1456) — thread model so the claude executor can pick
       // anthropic-beta per model. Only DefaultExecutor reads the extra args; executors
       // with their own execute() (antigravity) or explicit super calls are unaffected.
-      // 0.5.165 (upstream f4f06f29) — and the outgoing body, for headers that must match
+      // 0.5.166 (upstream f4f06f29) — and the outgoing body, for headers that must match
       // it (claude: x-claude-code-session-id, redact-thinking beta).
       const headers = this.buildHeaders(effectiveCredentials, stream, url, model, transformedBody);
 

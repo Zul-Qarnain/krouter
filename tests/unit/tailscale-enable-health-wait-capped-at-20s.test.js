@@ -1,4 +1,4 @@
-// 0.5.165 (upstream e7c269b8) — enabling Tailscale Funnel waited out the full
+// 0.5.166 (upstream e7c269b8) — enabling Tailscale Funnel waited out the full
 // 180 s HEALTH_CHECK.timeoutMs when the *.ts.net name did not resolve yet, so the
 // dashboard toggle hung for about three minutes before it reported success.
 // The timeout is non-fatal there (the watchdog re-verifies later), so the enable

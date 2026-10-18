@@ -1,5 +1,5 @@
 /**
- * 0.5.165 (upstream 6e4f82db) — Gemini validates that functionCall ids are
+ * 0.5.166 (upstream 6e4f82db) — Gemini validates that functionCall ids are
  * unique across the WHOLE conversation and rejects the entire request with
  * 400 INVALID_ARGUMENT when one repeats. An OpenAI tool_call_id is only unique
  * within its own assistant turn, so a long agent session can replay call_51859

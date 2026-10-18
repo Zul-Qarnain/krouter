@@ -1,4 +1,4 @@
-// 0.5.165 — Claude message-shape cleanups for bodies Anthropic (or a strict gateway)
+// 0.5.166 — Claude message-shape cleanups for bodies Anthropic (or a strict gateway)
 // rejects with a 400:
 //   8a81085a  a turn whose content is ONE block object (not an array) was dropped;
 //             a client already at 4 cache_control markers reached 5 in

@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 0dd4d6be) — normalizeCodexTools rebuilds every function tool
+// 0.5.166 (upstream 0dd4d6be) — normalizeCodexTools rebuilds every function tool
 // and used to drop `strict`. An explicit boolean from the client (flat Responses
 // shape or nested Chat shape, including what the Chat -> Responses translator
 // emits) now survives; an unspecified flag stays unset.

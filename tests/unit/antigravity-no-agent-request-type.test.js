@@ -1,5 +1,5 @@
 /**
- * 0.5.165 (upstream 5798b308) — Google buckets Antigravity chat requests that
+ * 0.5.166 (upstream 5798b308) — Google buckets Antigravity chat requests that
  * carry `requestType: "agent"` and answers 429 RESOURCE_EXHAUSTED with no
  * detail, even with quota left. The official Antigravity client omits the field
  * entirely on the chat path, so kRouter must too: in the executor envelope and

@@ -1,7 +1,7 @@
 // End to end: a strict pool that is inactive must block a chat request, from the
 // pool lookup (resolveConnectionProxyConfig) through account selection
 // (getProviderCredentials) to the executor's fetch (handleChatCore ->
-// proxyAwareFetch). Each layer was fixed on its own in 0.5.165; this file checks
+// proxyAwareFetch). Each layer was fixed on its own in 0.5.166; this file checks
 // the chain.
 //
 // The gap this file was written against is closed: getProviderCredentials now

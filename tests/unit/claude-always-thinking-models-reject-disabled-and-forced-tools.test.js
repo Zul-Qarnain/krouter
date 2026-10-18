@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 49ba54b2 + a07ed95b) — Sonnet 5.5, Opus 5.5 and Fable think on
+// 0.5.166 (upstream 49ba54b2 + a07ed95b) — Sonnet 5.5, Opus 5.5 and Fable think on
 // every turn. Anthropic answers 400 for thinking {type:"disabled"} and for a forced
 // tool_choice (any / tool) on these models. OpenAI clients hit it through
 // tool_choice:"required" (LangChain structured output), and the provider-level

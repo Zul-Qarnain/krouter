@@ -1,4 +1,4 @@
-// 0.5.165 (upstream e214fb1c, sort half) — Claude quota rows arrived in
+// 0.5.166 (upstream e214fb1c, sort half) — Claude quota rows arrived in
 // payload order. `seven_day_*` keys and the new `limits[]` scoped rows are
 // appended as Anthropic happens to send them, and the generic PROVIDER_MODELS
 // sort cannot help: it keys on model ids ("claude-opus-5-5"), never on quota

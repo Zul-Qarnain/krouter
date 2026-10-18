@@ -1,4 +1,4 @@
-// 0.5.165 (upstream fbcaa282) — bound the deferred response.completed wait.
+// 0.5.166 (upstream fbcaa282) — bound the deferred response.completed wait.
 import { describe, expect, it, vi } from "vitest";
 
 import "../translator/registerAll.js";

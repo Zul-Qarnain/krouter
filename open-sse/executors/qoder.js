@@ -55,7 +55,7 @@ function normalizeMessages(messages) {
       continue;
     }
     const cloned = { ...msg };
-    // 0.5.165 — flattening to text dropped every image, so a vision request
+    // 0.5.166 — flattening to text dropped every image, so a vision request
     // silently became a text request about an unseen image (upstream 2ab6a4c9).
     cloned.content = normalizeContent(msg.content);
     out.push(cloned);
@@ -64,7 +64,7 @@ function normalizeMessages(messages) {
 }
 
 /**
- * 0.5.165 — normalize one message's content for Qoder (upstream 2ab6a4c9).
+ * 0.5.166 — normalize one message's content for Qoder (upstream 2ab6a4c9).
  *
  * Text-only content is still flattened to a plain string (Qoder's historical
  * shape). When images are present the content stays an array and image blocks
@@ -134,7 +134,7 @@ function lastUserText(messages) {
     const m = messages[i];
     if (m?.role !== "user") continue;
     if (typeof m.content === "string") return m.content;
-    // 0.5.165 — multipart content is an array once images survive
+    // 0.5.166 — multipart content is an array once images survive
     // normalizeContent, so read its text too (upstream 2ab6a4c9).
     if (Array.isArray(m.content)) return extractText(m.content);
   }
@@ -161,7 +161,7 @@ function stableChatRecordId(model, messages, tools, maxTokens) {
     if (typeof m.content === "string" && m.content) {
       h.update("\0"); h.update(m.content);
     } else if (Array.isArray(m.content)) {
-      // 0.5.165 — include image refs so the same prompt with a different
+      // 0.5.166 — include image refs so the same prompt with a different
       // image gets its own chat_record_id (upstream 2ab6a4c9).
       h.update("\0");
       try { h.update(JSON.stringify(m.content)); } catch { /* unserialisable content contributes nothing */ }
@@ -271,7 +271,7 @@ async function buildQoderRequestBody({ model, body, credentials, log, proxyOptio
 }
 
 /**
- * 0.5.165 — does a Qoder error body carry a billing/quota signature?
+ * 0.5.166 — does a Qoder error body carry a billing/quota signature?
  * Codes 110 (daily count exceeded), 112 (quota exhausted), 10605 (queue
  * throttle), or a pricingUrl field (upstream 80afb599 + 2daf25ff).
  */
@@ -287,7 +287,7 @@ function isBillingBlock(inner) {
 }
 
 /**
- * 0.5.165 — read the first SSE data line before committing to HTTP 200
+ * 0.5.166 — read the first SSE data line before committing to HTTP 200
  * (upstream 80afb599 + 2daf25ff + 782c137b).
  *
  * Returns `{ isError, isBilling, statusVal, message }` for an error envelope,
@@ -346,7 +346,7 @@ async function peekFirstQoderFrame(reader) {
   }
 }
 
-// 0.5.165 — statusCodeValue is documented numeric and body a JSON string, but
+// 0.5.166 — statusCodeValue is documented numeric and body a JSON string, but
 // Qoder has sent "403" and object bodies; accept both (upstream 2daf25ff).
 function envelopeStatus(envelope) {
   const raw = Number(envelope?.statusCodeValue);
@@ -367,7 +367,7 @@ function envelopeBody(envelope) {
  * The inner body is an OpenAI streaming chunk (or "[DONE]"). We unwrap it
  * and re-emit as `data: <inner>\n\n`.
  *
- * 0.5.165 — a Qoder error arrives inside an HTTP 200 stream, and turning it
+ * 0.5.166 — a Qoder error arrives inside an HTTP 200 stream, and turning it
  * into assistant text with finish_reason "stop" made a billing block, a
  * duplicate-request 403 and a 503 all look like a finished completion, so
  * chatCore never locked the connection and failover never fired. The first
@@ -423,7 +423,7 @@ async function wrapQoderSSE(response, model) {
     const inner = envelopeBody(envelope);
     if (statusVal !== 200) {
       if (isBillingBlock(inner)) {
-        // 0.5.165 — the peek covers the first frame only. A billing envelope
+        // 0.5.166 — the peek covers the first frame only. A billing envelope
         // that lands mid-stream becomes a structured error chunk, not fake
         // assistant text: parseSSEToOpenAIResponse turns chunk.error into a
         // non-200 result (status preserved by streamErrorStatus) so the model
@@ -497,7 +497,7 @@ async function wrapQoderSSE(response, model) {
     },
   });
 
-  // 0.5.165 — `response.body` is locked to the peek's reader now, so feed the
+  // 0.5.166 — `response.body` is locked to the peek's reader now, so feed the
   // transform from a source that replays the peeked bytes first and then pulls
   // the rest of the socket (upstream 80afb599 re-seeds its own read loop; here
   // the TransformStream and its backpressure stay as they were).
@@ -628,7 +628,7 @@ export class QoderExecutor extends BaseExecutor {
       response = await proxyAwareFetch(
         url,
         { method: "POST", headers, body: encodedBodyBuf, signal: mergedSignal },
-        // 0.5.165 — a failed proxy attempt may already have reached Qoder.
+        // 0.5.166 — a failed proxy attempt may already have reached Qoder.
         // Replaying this body directly reuses its COSY requestId and comes
         // back 403 code 103 "Duplicate request", so mark the call strict: the
         // transport error reaches the account loop, which retries through

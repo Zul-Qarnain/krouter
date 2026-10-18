@@ -204,7 +204,7 @@ export function openCodeGoSessionId({ credentials, body, clientTool } = {}) {
 
 export const OPENCODE_GO_SESSION_HEADER = SESSION_HEADER;
 
-// 0.5.165 (upstream 468aa7d9) — the relay answers 400 for every `response_format`
+// 0.5.166 (upstream 468aa7d9) — the relay answers 400 for every `response_format`
 // on its deepseek family, both json_schema and json_object, while serving the field
 // for glm / kimi / mimo / minimax / qwen / grok on the same relay. The rejection
 // body is a bare model echo (`{"model":"deepseek-v4.1-flash"}`) naming neither the

@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 7c2b1fe3) — clients driving reasoning models (Hermes Agent and
+// 0.5.166 (upstream 7c2b1fe3) — clients driving reasoning models (Hermes Agent and
 // anything following the DeepSeek/Kimi convention) echo the previous turn's
 // reasoning_content / reasoning / reasoning_details on every assistant message.
 // Groq answers 400, Mistral 422 ("extra_forbidden") and Cerebras 400, so from the

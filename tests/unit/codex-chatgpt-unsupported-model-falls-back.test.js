@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 9f41ee75, fallback half) — Codex answers a model the
+// 0.5.166 (upstream 9f41ee75, fallback half) — Codex answers a model the
 // ChatGPT plan cannot use with a 400:
 //   "The 'gpt-5.4' model is not supported when using Codex with a ChatGPT account."
 // That is about THIS account's plan, so lock that model on that account and try

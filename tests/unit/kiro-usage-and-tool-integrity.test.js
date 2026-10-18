@@ -1,5 +1,5 @@
 /**
- * 0.5.165 — Kiro executor integrity fixes (upstream b44bb09f, executor hunks).
+ * 0.5.166 — Kiro executor integrity fixes (upstream b44bb09f, executor hunks).
  *
  * A. Tool-call bytes never reached totalContentLength, so the /4 estimator in
  *    finish() reported OUT 0 -- or the Math.max floor of 1 -- for every turn

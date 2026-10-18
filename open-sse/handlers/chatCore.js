@@ -54,7 +54,7 @@ export function rotateWorkingCreds(workingCreds, result) {
   return workingCreds;
 }
 
-// 0.5.165 — client headers an executor or translator may read, as
+// 0.5.166 — client headers an executor or translator may read, as
 // credentials.rawHeaders: OpenCode Go's own session id, Cursor's Claude Code UA
 // check, Kiro's interleaved-thinking budget. A whitelist, never the whole set:
 // authorization / x-api-key / cookie carry the kRouter key (upstream aba4c45d).
@@ -119,7 +119,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // the non-streaming path, tries to parse an SSE body as JSON, and hands the
   // client an empty message. grok-cli and codebuddy-cn both force stream in
   // their executors, so both must be listed here.
-  // 0.5.165 — opencode joins them: OpenCode Free answers stream:false with
+  // 0.5.166 — opencode joins them: OpenCode Free answers stream:false with
   // 403 FreeTierError on every model, so its executor forces the upstream stream
   // (upstream 5bdcd5e7).
   const providerRequiresStreaming = provider === "openai"
@@ -155,7 +155,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const clientTool = detectClientTool(clientRawRequest?.headers || {}, body);
   const passthrough = isNativePassthrough(clientTool, provider);
 
-  // 0.5.165 — a per-request copy carries the whitelisted client headers to the
+  // 0.5.166 — a per-request copy carries the whitelisted client headers to the
   // translator and executor; the caller's credentials object is shared across
   // concurrent requests and is never written (upstream aba4c45d).
   const requestCredentials = credentials
@@ -177,7 +177,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Ponytail) for one request without touching the global dashboard toggles.
   const tokenSaverEnabled = clientRawRequest?.headers?.[TOKEN_SAVER_HEADER]?.toLowerCase() !== "off";
 
-  // 0.5.165 — openai-to-cursor rewrites role:"tool" messages into user text, so
+  // 0.5.166 — openai-to-cursor rewrites role:"tool" messages into user text, so
   // the post-translate RTK pass below finds no tool results for Cursor. Compress
   // a copy of the source body before translation instead and skip that pass. A
   // copy, never the client's body: a combo retry re-sends it (upstream c933eefc).
@@ -225,7 +225,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude
-  // clients, never on the cache-preserving path). 0.5.165 — also drop later
+  // clients, never on the cache-preserving path). 0.5.166 — also drop later
   // same-name tools for DeepSeek models, which 400 on duplicate names everywhere;
   // that pass runs on the cache path too, since the request fails without it
   // (upstream 7f5bd155).
@@ -267,7 +267,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   // MiniMax answers 400 (error 2013) for a Claude tool without a `type`.
-  // 0.5.165 — scoped to the providers that need it: DeepSeek /anthropic and other
+  // 0.5.166 — scoped to the providers that need it: DeepSeek /anthropic and other
   // strict anthropic-compatible gateways reject type "custom" (upstream 998bb3d9).
   if (shouldDefaultClaudeToolType(provider, finalFormat, translatedBody.tools)) {
     translatedBody.tools = defaultClaudeToolType(translatedBody.tools);
@@ -380,7 +380,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
     connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
     vercelRelayUrl: credentials?.providerSpecificData?.vercelRelayUrl || "",
-    // 0.5.165 — strict pools must never fall back to a direct connection. Without
+    // 0.5.166 — strict pools must never fall back to a direct connection. Without
     // these two fields the guard in proxyAwareFetch and the Cursor executor never
     // saw strictProxy on a chat request (upstream cfd8c618).
     proxyPoolId: credentials?.providerSpecificData?.connectionProxyPoolId || null,
@@ -535,7 +535,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       // the caller's shared credentials object (our concurrency-safety invariant).
       let workingCreds = credentials;
       const newCredentials = await refreshWithRetry(async () => {
-        // 0.5.165 — refresh through the request's proxy. Without it the call that
+        // 0.5.166 — refresh through the request's proxy. Without it the call that
         // carries the refresh token left over the direct IP, pooled or strict.
         const result = await executor.refreshCredentials(workingCreds, log, proxyOptions);
         workingCreds = rotateWorkingCreds(workingCreds, result);
@@ -624,7 +624,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // to this account can begin in parallel with the stream the user receives).
   releaseOnce();
 
-  // 0.5.165 — whether kRouter cloaked this request, so the decloak fallback cannot
+  // 0.5.166 — whether kRouter cloaked this request, so the decloak fallback cannot
   // rename a client tool whose own name ends in the cloak suffix. Uses the PROVIDER
   // credential; sharedCtx.apiKey is kRouter's own client key (usage tracking).
   const cloakActive = isClaudeCloakingActive(provider, requestCredentials?.accessToken || requestCredentials?.apiKey || null);

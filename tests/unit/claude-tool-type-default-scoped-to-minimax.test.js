@@ -1,4 +1,4 @@
-// 0.5.165 — the v0.5.153 port of upstream e08ac6da stamped tools[].type = "custom"
+// 0.5.166 — the v0.5.153 port of upstream e08ac6da stamped tools[].type = "custom"
 // on every Claude-format request. MiniMax needs it (error 2013), but strict
 // gateways behind anthropic-compatible-* (DeepSeek /anthropic first among them)
 // only accept the typeless shape and answer 400 "unknown variant `custom`".

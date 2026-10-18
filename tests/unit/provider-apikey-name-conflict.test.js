@@ -1,4 +1,4 @@
-// 0.5.165 — adding an API key under a name that already exists for the provider
+// 0.5.166 — adding an API key under a name that already exists for the provider
 // used to replace the stored key silently (connectionsRepo upserted apikey rows
 // BY NAME with { ...existing, ...data }). Now the repo refuses with a typed
 // PROVIDER_NAME_CONFLICT unless the caller opts in, and POST /api/providers

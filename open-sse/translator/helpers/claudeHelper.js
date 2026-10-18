@@ -9,7 +9,7 @@ import { getCapabilitiesForModel } from "../../providers/capabilities.js";
 // message count as empty, and prepareClaudeRequest drops it.
 // 0.5.121 (upstream a7941dda) — image / document: a vision turn whose only block is
 // an image is valid; dropping it left messages[] empty ("at least one message is required").
-// 0.5.165 (upstream 4f274c7f) — container_upload: a Files API reference sent alone
+// 0.5.166 (upstream 4f274c7f) — container_upload: a Files API reference sent alone
 // is valid too; dropping it forwarded messages: [].
 const CONTENTFUL_BLOCK_TYPES = new Set(["tool_use", "tool_result", "image", "document", "container_upload"]);
 
@@ -22,7 +22,7 @@ function isContentfulBlock(block) {
 // Check if message has valid non-empty content
 export function hasValidContent(msg) {
   if (typeof msg.content === "string" && msg.content.trim()) return true;
-  // 0.5.165 (upstream 8a81085a) — content may be ONE block object instead of an array.
+  // 0.5.166 (upstream 8a81085a) — content may be ONE block object instead of an array.
   if (msg.content && typeof msg.content === "object" && !Array.isArray(msg.content)) {
     return isContentfulBlock(msg.content);
   }
@@ -30,7 +30,7 @@ export function hasValidContent(msg) {
   return false;
 }
 
-// 0.5.165 (upstream 8a81085a) — some clients send content as a single block object
+// 0.5.166 (upstream 8a81085a) — some clients send content as a single block object
 // (the spec allows string | array). Every pass below reads arrays, so the turn was
 // dropped or zeroed and the history silently lost. Wrap it as a one-block array,
 // copy-on-write, without the client's cache_control (a bare-object marker never
@@ -42,7 +42,7 @@ function normalizeMessageContent(msg) {
   return { ...msg, content: [block] };
 }
 
-// 0.5.165 (upstream c8644368) — Anthropic rejects a thinking block with no visible
+// 0.5.166 (upstream c8644368) — Anthropic rejects a thinking block with no visible
 // text (400 "each thinking block must contain non-whitespace thinking"), signature
 // or not, and clients replay it on every later turn. redacted_thinking carries
 // `data`, not text, and is kept.
@@ -59,7 +59,7 @@ function dropBlankThinking(msg) {
   return { ...msg, content: msg.content.filter(block => !isBlankThinkingBlock(block)) };
 }
 
-// 0.5.165 (upstream 75834e96 + 5e9bd464) — newer Claude models reject a body that
+// 0.5.166 (upstream 75834e96 + 5e9bd464) — newer Claude models reject a body that
 // ends on an assistant turn ("does not support assistant message prefill"). The
 // cleanups drop messages left empty, so an emptied final user turn quietly made the
 // previous assistant turn the last one. Restore a user turn, unless the client
@@ -72,7 +72,7 @@ export function ensureTrailingUserTurn(messages, originalLastRole) {
   return [...messages, { role: "user", content: [{ type: "text", text: TRAILING_USER_PLACEHOLDER }] }];
 }
 
-// 0.5.165 (upstream 49ba54b2 + a07ed95b) — Claude models that think on every turn
+// 0.5.166 (upstream 49ba54b2 + a07ed95b) — Claude models that think on every turn
 // (caps thinkingCanDisable:false: Opus 5.5, Sonnet 5.5, Fable) answer 400 to thinking
 // "disabled" and to a forced tool_choice (any / tool). The model id must be a Claude
 // one: Gemini 3 and the CodeBuddy models carry the same flag and keep their shape.
@@ -124,7 +124,7 @@ export function applyClaudeModelRules(body, model = body?.model) {
   return next;
 }
 
-// 0.5.165 (upstream c8644368) — context_management (Claude Code's context-editing
+// 0.5.166 (upstream c8644368) — context_management (Claude Code's context-editing
 // block) is defined only by Anthropic's Messages API. Gateways fronting other engines
 // answer 400 "context_management: Extra inputs are not permitted".
 function isAnthropicServing(provider) {
@@ -132,7 +132,7 @@ function isAnthropicServing(provider) {
     || (typeof provider === "string" && provider.startsWith("anthropic-compatible-"));
 }
 
-// 0.5.165 (upstream 8a81085a) — Anthropic allows at most 4 cache_control markers per
+// 0.5.166 (upstream 8a81085a) — Anthropic allows at most 4 cache_control markers per
 // request. preserveCacheControl keeps the client's markers but the tool step still
 // re-anchors the last tool, so a client already at 4 reached 5: a non-retryable 400
 // that walked the whole account pool. Trim past the budget, holding the head anchors
@@ -268,7 +268,7 @@ export function normalizeClaudePassthrough(body, model = "") {
 
   const originalLastRole = Array.isArray(body.messages) ? body.messages[body.messages.length - 1]?.role : undefined;
 
-  // 0.5.165 (upstream 8a81085a) — wrap bare-object content first: the hoist below
+  // 0.5.166 (upstream 8a81085a) — wrap bare-object content first: the hoist below
   // reads arrays and would zero a bare-object system turn.
   if (Array.isArray(body.messages)) {
     body.messages = body.messages.map(normalizeMessageContent);
@@ -336,7 +336,7 @@ export function normalizeClaudePassthrough(body, model = "") {
   // Anthropic rejects a block with empty text (400 "text content blocks must be
   // non-empty"); a message whose blocks were all stripped above has to be dropped,
   // not padded with an empty placeholder.
-  // 0.5.165 (upstream c8644368) — blank thinking blocks go too, and copy-on-write.
+  // 0.5.166 (upstream c8644368) — blank thinking blocks go too, and copy-on-write.
   // (upstream 75834e96) — then restore a trailing user turn the drop removed.
   if (Array.isArray(body.messages)) {
     const kept = [];
@@ -393,14 +393,14 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     delete body.output_config;
   }
 
-  // 0.5.165 (upstream c8644368) — same-format claude->claude bodies skip the
+  // 0.5.166 (upstream c8644368) — same-format claude->claude bodies skip the
   // translator, so Claude Code's context_management rode through to every engine.
   if (!isAnthropicServing(provider) && body.context_management !== undefined) {
     const { context_management, ...rest } = body;
     body = rest;
   }
 
-  // 0.5.165 (upstream 49ba54b2 + a07ed95b) — thinking "disabled" / forced tool_choice
+  // 0.5.166 (upstream 49ba54b2 + a07ed95b) — thinking "disabled" / forced tool_choice
   // on always-thinking Claude models (the executor repeats this for passthrough).
   body = applyClaudeModelRules(body, body.model);
 
@@ -425,7 +425,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
 
     // Pass 1: remove cache_control (unless preserving) + filter empty messages
     for (let i = 0; i < len; i++) {
-      // 0.5.165 — wrap a bare-object content (8a81085a), drop blank thinking (c8644368)
+      // 0.5.166 — wrap a bare-object content (8a81085a), drop blank thinking (c8644368)
       const msg = dropBlankThinking(normalizeMessageContent(body.messages[i]));
 
       // Remove cache_control from content blocks (skip when preserving)
@@ -445,7 +445,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     // Pass 1.5: Fix tool_use/tool_result ordering
     // Each tool_use must have tool_result in the NEXT message (not same message with other content)
     filtered = fixToolUseOrdering(filtered);
-    // 0.5.165 (upstream 75834e96) — never let the empty-turn filter create prefill.
+    // 0.5.166 (upstream 75834e96) — never let the empty-turn filter create prefill.
     filtered = ensureTrailingUserTurn(filtered, originalLastRole);
 
     body.messages = filtered;
@@ -525,7 +525,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     }
   }
 
-  // 0.5.165 (upstream 8a81085a) — the tool re-anchor above runs even with
+  // 0.5.166 (upstream 8a81085a) — the tool re-anchor above runs even with
   // preserveCacheControl, so hold the request to Anthropic's 4-marker budget.
   body = capCacheControlMarkers(body);
 

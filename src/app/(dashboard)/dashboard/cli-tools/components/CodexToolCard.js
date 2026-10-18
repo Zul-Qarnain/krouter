@@ -63,13 +63,13 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   }, [codexStatus]);
 
-  // 0.5.165 — read the provider Codex actually uses, which the route parses from
+  // 0.5.166 — read the provider Codex actually uses, which the route parses from
   // model_provider. The first base_url in the file is often another router's, since
   // Apply appends the krouter table after it (upstream 8f20daac).
   const currentBaseUrl = codexStatus?.activeProvider?.baseUrl || "";
   const fileApiKey = codexStatus?.activeProvider?.apiKey || "";
 
-  // 0.5.165 — preselect the key the active provider sends, but only a dashboard key:
+  // 0.5.166 — preselect the key the active provider sends, but only a dashboard key:
   // a placeholder or revoked key in the file must not be written back on Apply.
   useEffect(() => {
     if (fileApiKey && apiKeys?.some((k) => k.key === fileApiKey)) setSelectedApiKey(fileApiKey);
@@ -84,7 +84,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const configStatus = getConfigStatus();
 
   const getEffectiveBaseUrl = () => {
-    // 0.5.165 — strip a trailing slash first, or ".../v1/" became ".../v1//v1" (upstream 8f20daac).
+    // 0.5.166 — strip a trailing slash first, or ".../v1/" became ".../v1//v1" (upstream 8f20daac).
     const url = (customBaseUrl || `${baseUrl}/v1`).replace(/\/+$/, "");
     // Ensure URL ends with /v1
     return url.endsWith("/v1") ? url : `${url}/v1`;

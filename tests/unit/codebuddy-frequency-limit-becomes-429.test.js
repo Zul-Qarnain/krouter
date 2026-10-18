@@ -1,4 +1,4 @@
-// 0.5.165 (upstream e706e4f2) — CodeBuddy CN answers a per-model rate limit with
+// 0.5.166 (upstream e706e4f2) — CodeBuddy CN answers a per-model rate limit with
 // its own envelope code 6004 ("超出频率限制 ... 请于<time>后重试") on an HTTP status
 // that is not 429, so kRouter classified it as a plain upstream error: no
 // cross-account fallback, no cooldown, and the retry hammered the same account.

@@ -187,7 +187,7 @@ export function defaultClaudeToolType(tools) {
   return tools.map(tool => tool?.type ? tool : { ...tool, type: "custom" });
 }
 
-// 0.5.165 — only the gateways listed here reject a typeless Claude tool. Applying
+// 0.5.166 — only the gateways listed here reject a typeless Claude tool. Applying
 // the default everywhere (the v0.5.153 port) broke strict anthropic-compatible
 // gateways that accept only the typeless shape: DeepSeek /anthropic answers 400
 // "unknown variant `custom`" (upstream 998bb3d9).

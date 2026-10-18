@@ -1,4 +1,4 @@
-// 0.5.165 — three Codex call sites each carried their own hardcoded CLI version,
+// 0.5.166 — three Codex call sites each carried their own hardcoded CLI version,
 // and all three had gone stale (upstream a7047a07, ca6e8407).
 //
 //   open-sse/handlers/imageProviders/codex.js   codex_cli_rs/0.136.0

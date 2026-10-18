@@ -1,4 +1,4 @@
-// 0.5.165 — the Antigravity quota parser filters Google's listQuotas response
+// 0.5.166 — the Antigravity quota parser filters Google's listQuotas response
 // through a hand-written `importantModels` allow-list whose own comment says it
 // "must match PROVIDER_MODELS ag ids". It drifted:
 //

@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 84035760 + cbffeb97) — Anthropic answers Opus 5.5 requests from
+// 0.5.166 (upstream 84035760 + cbffeb97) — Anthropic answers Opus 5.5 requests from
 // a claude-cli older than 2.1.280 with 400 `claude_code_version_too_old`. kRouter
 // spoofs the version in two places (the User-Agent and the billing header in the
 // system prompt); both must report the same, current version, from one constant.

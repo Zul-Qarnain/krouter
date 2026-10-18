@@ -1,4 +1,4 @@
-// 0.5.165 (upstream b677bfce) — the CLI TUI "Create New Combo" flow pushed the
+// 0.5.166 (upstream b677bfce) — the CLI TUI "Create New Combo" flow pushed the
 // raw /api/models record ({ provider, model, fullModel, alias }) into the combo,
 // so the saved combo held objects instead of "provider/model" strings and the
 // router could not resolve any of its members.

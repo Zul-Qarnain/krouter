@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 0f488c70) — a refusal from the Anthropic API (stop_reason
+// 0.5.166 (upstream 0f488c70) — a refusal from the Anthropic API (stop_reason
 // "refusal", zero output tokens, no content blocks) must reach an OpenAI-format
 // client as finish_reason "content_filter" carrying Anthropic's explanation, not as
 // a clean, empty "stop". Streaming and non-streaming must agree, and the reverse

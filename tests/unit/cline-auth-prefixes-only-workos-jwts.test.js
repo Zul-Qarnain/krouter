@@ -1,4 +1,4 @@
-// 0.5.165 (upstream f6e7cabe) — getClineAccessToken prefixed EVERY token with
+// 0.5.166 (upstream f6e7cabe) — getClineAccessToken prefixed EVERY token with
 // "workos:". That is right for Cline OAuth access tokens (WorkOS JWTs, "eyJ...")
 // but wrong for ClinePass API keys ("clp_..."), which api.cline.bot accepts only
 // verbatim, so every ClinePass API-key request came back 401.

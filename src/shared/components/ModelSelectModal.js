@@ -18,7 +18,7 @@ const PROVIDER_ORDER = [
 ];
 
 // Providers that need no auth — always show in model selector.
-// 0.5.165 — except hidden ones (mimo-free, a dead channel per upstream 6d96e24b),
+// 0.5.166 — except hidden ones (mimo-free, a dead channel per upstream 6d96e24b),
 // so the vision-pool picker stops offering it.
 const NO_AUTH_PROVIDER_IDS = Object.keys(FREE_PROVIDERS).filter(id => FREE_PROVIDERS[id].noAuth && !FREE_PROVIDERS[id].hidden);
 

@@ -317,7 +317,7 @@ describe("handleImageGenerationCore", () => {
     expect(responseBody.data[0].b64_json).toBeTruthy();
   });
 
-  // 0.5.165 — gpt-5.5 is retired from ChatGPT sign-in, so the suffixed id this
+  // 0.5.166 — gpt-5.5 is retired from ChatGPT sign-in, so the suffixed id this
   // covers moved to gpt-5.6-sol-image, and the version header now comes from the
   // one shared CODEX_CLI_VERSION instead of a private 0.136.0 copy.
   it("generates image with Codex gpt-5.6-sol-image using current Codex version header", async () => {

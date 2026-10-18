@@ -9,7 +9,7 @@ import {
 import { detectRequiredCapabilities } from "../../open-sse/services/combo.js";
 import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
 
-// 0.5.165 — no implicit default any more (mmf/mimo-auto is a dead channel, see
+// 0.5.166 — no implicit default any more (mmf/mimo-auto is a dead channel, see
 // vision-pool-no-dead-mimo-default.test.js), so these tests pick a pool model.
 const FALLBACK = "openai/gpt-4o"; // a vision-only pool model the user picked (no audio)
 const visionOn = { capacityAdapter: { vision: { enabled: true, roundRobin: false, models: [FALLBACK] } } };

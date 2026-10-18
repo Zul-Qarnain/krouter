@@ -11,7 +11,7 @@
  * 0.5.125 (upstream 8e59093d) adapted for kRouter. Only the vision pool is enabled
  * by default (see settingsRepo); audio/pdf/video pools are opt-in.
  *
- * 0.5.165 — no implicit default model (upstream 6d96e24b hid mimo-free: Xiaomi
+ * 0.5.166 — no implicit default model (upstream 6d96e24b hid mimo-free: Xiaomi
  * ended the free MiMo channel). The old default mmf/mimo-auto now fails every
  * call, so an enabled pool with no models is a no-op until the user picks one,
  * and stored mmf/* entries are dropped. The next default (upstream 6886915f,
@@ -21,7 +21,7 @@ import { getCapabilitiesForModel } from "../providers/capabilities.js";
 
 const CAPABILITY_KEYS = ["vision", "pdf", "audioInput", "videoInput"];
 const HARD_CAPS = new Set(CAPABILITY_KEYS);
-// 0.5.165 — pool entries on a dead channel (upstream 6d96e24b). Matches both the
+// 0.5.166 — pool entries on a dead channel (upstream 6d96e24b). Matches both the
 // alias form the dashboard stores and the full provider id.
 const DEAD_POOL_PROVIDERS = ["mmf/", "mimo-free/"];
 
@@ -50,7 +50,7 @@ function normalizeCapEntry(entry) {
   return { enabled: false, roundRobin: false, models: [] };
 }
 
-// Resolve one capability's full config. 0.5.165 — an enabled pool with no models
+// Resolve one capability's full config. 0.5.166 — an enabled pool with no models
 // stays empty (no implicit default), so it adds nothing to the request.
 export function getCapacityAdapterConfig(cap, settings) {
   return normalizeCapEntry(settings?.capacityAdapter?.[cap]);

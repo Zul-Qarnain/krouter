@@ -1,4 +1,4 @@
-// 0.5.165 — token warmer: refresh through the connection's own proxy, and stop
+// 0.5.166 — token warmer: refresh through the connection's own proxy, and stop
 // re-trying a refresh token the provider has already rejected (upstream
 // 0bc7f86e makes refreshAndUpdateCredentials throw in that case).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

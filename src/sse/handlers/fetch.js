@@ -161,7 +161,7 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
   let lastError = null;
   let lastStatus = null;
 
-  // 0.5.165 — scope this handler's locks, as search.js does. Tavily and Exa serve
+  // 0.5.166 — scope this handler's locks, as search.js does. Tavily and Exa serve
   // search and fetch from one connection; without a key markAccountUnavailable
   // writes modelLock___all and one failed fetch blocks search (and chat) on that
   // account. Read and cleared under the same key it is written with (upstream e0ffc7e2).
@@ -173,7 +173,7 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const errorMsg = lastError || credentials.lastError || "Unavailable";
-        // 0.5.165 — every account is parked: 503 + Retry-After, never a stale 401/400 (upstream 15687d19).
+        // 0.5.166 — every account is parked: 503 + Retry-After, never a stale 401/400 (upstream 15687d19).
         const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("FETCH", `[${providerId}] ${errorMsg} (${credentials.retryAfterHuman})`);
         return unavailableResponse(status, `[${providerId}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);

@@ -1,4 +1,4 @@
-// 0.5.165 (kRouter-own) — Gemini CLI's 429 names the wait in
+// 0.5.166 (kRouter-own) — Gemini CLI's 429 names the wait in
 // error.details[RetryInfo].retryDelay ("34.07s"). parseError copied it to
 // `retryAfter` only, a field nothing downstream reads, so the account lock
 // ignored it and fell back to generic backoff. It now also sets resetsAtMs,

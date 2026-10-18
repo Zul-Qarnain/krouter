@@ -1,5 +1,5 @@
 /**
- * 0.5.165 (upstream b3d6e089 + a61fc6a0) — two more Antigravity system-prompt
+ * 0.5.166 (upstream b3d6e089 + a61fc6a0) — two more Antigravity system-prompt
  * rewrites. Antigravity's backend flags competing-client branding and answers
  * 429 "Quota Exhausted" regardless of real quota.
  *

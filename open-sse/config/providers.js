@@ -33,7 +33,7 @@ const ANTHROPIC_BETA_BASE = [
 ];
 const ANTHROPIC_BETA_HEAVY_AGENT = ["advanced-tool-use-2025-11-20", "effort-2025-11-24"];
 
-// 0.5.165 — redact-thinking makes Anthropic return signature-only thinking blocks.
+// 0.5.166 — redact-thinking makes Anthropic return signature-only thinking blocks.
 // Right for clients that never render thinking, but it blanks the summaries a
 // request asked for with thinking.display "summarized" (upstream f4f06f29).
 const ANTHROPIC_BETA_REDACT_THINKING = "redact-thinking-2026-02-12";
@@ -45,12 +45,12 @@ export function selectAnthropicBeta(model = "", body = null) {
   return flags.join(",");
 }
 
-// 0.5.165 — one source for the spoofed Claude Code version: the User-Agent below and
+// 0.5.166 — one source for the spoofed Claude Code version: the User-Agent below and
 // the billing header (claudeCloaking.js) must agree. Anthropic answers Opus 5.5 from a
 // claude-cli below 2.1.280 with 400 claude_code_version_too_old (upstream 84035760).
 export const CLAUDE_CLI_VERSION = "2.1.280";
 
-// 0.5.165 — one source for the spoofed Codex CLI version. OpenAI's backend filters
+// 0.5.166 — one source for the spoofed Codex CLI version. OpenAI's backend filters
 // backend-api/codex/models by the client version it is told, so a stale value hides
 // the whole GPT-6 family; the User-Agent below, the image executor and the roster
 // fetch must all send the same number (upstream a7047a07, ca6e8407).
@@ -304,7 +304,7 @@ export const PROVIDERS = {
     format: "openai",
     headers: {}
   },
-  // 0.5.165 — a dead `opencode` entry pointing at http://localhost:4096 used to sit
+  // 0.5.166 — a dead `opencode` entry pointing at http://localhost:4096 used to sit
   // here. A duplicate object key wins by position, so the real opencode.ai entry
   // further down silently overrode it: the file read like a working localhost
   // config while that half was unreachable. Removed, not merged.

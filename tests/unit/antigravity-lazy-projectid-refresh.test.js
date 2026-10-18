@@ -1,4 +1,4 @@
-// 0.5.165 — a token refresh must not re-onboard Antigravity / Gemini-CLI
+// 0.5.166 — a token refresh must not re-onboard Antigravity / Gemini-CLI
 // accounts (upstream 1442cc73). Eagerly calling loadCodeAssist/onboardUser
 // after every refresh, across several accounts at once, trips Google's
 // anti-abuse limiter. The chat path resolves a missing projectId on demand

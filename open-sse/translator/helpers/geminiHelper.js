@@ -25,7 +25,7 @@ export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [
   // UI/Styling properties (from Cursor tools - NOT JSON Schema standard)
   "cornerRadius", "fillColor", "fontFamily", "fontSize", "fontWeight",
   "gap", "padding", "strokeColor", "strokeThickness", "textColor",
-  // 0.5.165 — non-standard annotation keywords some MCP tool schemas carry
+  // 0.5.166 — non-standard annotation keywords some MCP tool schemas carry
   // (JSON-Schema editor/IDE extensions). Gemini's schema proto has no field for
   // them, so one occurrence anywhere rejects the whole request with
   // "Unknown name X: Cannot find field" (upstream aafe3002). The x-* spellings
@@ -305,7 +305,7 @@ function flattenTypeArrays(obj) {
 function ensureObjectType(obj) {
   if (!obj || typeof obj !== "object") return;
   if (obj.properties && !obj.type) obj.type = "object";
-  // 0.5.165 — a `properties` map is a map of schemas, not a schema node. An MCP
+  // 0.5.166 — a `properties` map is a map of schemas, not a schema node. An MCP
   // tool with a parameter literally named `properties` made the old blanket
   // recursion stamp `type: "object"` onto the map itself, which Gemini then read
   // as a second parameter named "type" and rejected with 400 (upstream 09f6d395).
@@ -443,7 +443,7 @@ export function cleanJSONSchemaForAntigravity(schema) {
   return cleaned;
 }
 
-// 0.5.165 — Gemini / Cloud Code read a `$ref` key inside functionResponse.response
+// 0.5.166 — Gemini / Cloud Code read a `$ref` key inside functionResponse.response
 // as a pointer into functionResponse.parts and answer 400 INVALID_ARGUMENT
 // ("The referenced name `#/$defs/...` ... does not match to a display_name in the
 // function_response.parts"). Tool results that carry a JSON Schema or OpenAPI
@@ -458,7 +458,7 @@ export function sanitizeFunctionResponsePayload(value) {
   if (!value || typeof value !== "object") return value;
   const out = {};
   for (const [key, val] of Object.entries(value)) {
-    // 0.5.165 — Object.hasOwn, not `MAP[key] ?? key`: a plain-object lookup reaches
+    // 0.5.166 — Object.hasOwn, not `MAP[key] ?? key`: a plain-object lookup reaches
     // Object.prototype, so tool output with a key named "constructor", "toString" or
     // "__proto__" had that key replaced by the stringified prototype member.
     // defineProperty, not assignment: a literal "__proto__" key would otherwise hit
@@ -481,7 +481,7 @@ function sanitizeFunctionResponsePart(part) {
   return { ...part, functionResponse: { ...part.functionResponse, response: sanitizeFunctionResponsePayload(response) } };
 }
 
-// 0.5.165 — one normalizer for every Gemini-shaped `contents` array: the
+// 0.5.166 — one normalizer for every Gemini-shaped `contents` array: the
 // openai -> gemini translator, the Claude -> Antigravity envelope and the
 // Antigravity executor (which creates adjacent same-role turns and empty parts
 // when it strips thought blocks). Google answers 400 INVALID_ARGUMENT for

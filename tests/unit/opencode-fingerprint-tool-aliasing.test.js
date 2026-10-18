@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 5bdcd5e7, e964e482) — OpenCode Free only answers a request that
+// 0.5.166 (upstream 5bdcd5e7, e964e482) — OpenCode Free only answers a request that
 // declares tools literally named `read` and `shell` (live probe 2026-10-18: renaming
 // them to read_file is a 403). A caller that already has its own `read` with a
 // different schema would collide, so that one travels under an alias and the response

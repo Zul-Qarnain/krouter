@@ -1,5 +1,5 @@
 /**
- * 0.5.165 — Claude -> Kiro: images a tool returned (screenshots) used to be
+ * 0.5.166 — Claude -> Kiro: images a tool returned (screenshots) used to be
  * JSON.stringify'd into the tool result text when the result had no text
  * block, flooding the context with base64 and losing the image. Kiro tool
  * results are text-only, so the image now rides on the user turn's

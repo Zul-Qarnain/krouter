@@ -1,4 +1,4 @@
-// 0.5.165 (upstream ab044e6d, translator half) — the Responses API takes the
+// 0.5.166 (upstream ab044e6d, translator half) — the Responses API takes the
 // output cap as `max_output_tokens` and reasoning as `reasoning: {effort, summary}`.
 // The Chat -> Responses translator copied `max_tokens` verbatim (real OpenAI
 // /v1/responses answers 400 "Unsupported parameter: 'max_tokens'"), dropped

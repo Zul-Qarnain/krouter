@@ -1,4 +1,4 @@
-// 0.5.165 — credentials.rawHeaders had three readers and no writer (upstream aba4c45d):
+// 0.5.166 — credentials.rawHeaders had three readers and no writer (upstream aba4c45d):
 //   - OpenCode Go passes a caller's own x-opencode-session through (opencode-go.js);
 //   - Cursor forces Agent mode for a Claude Code user-agent (cursor.js);
 //   - Kiro honours `anthropic-beta: interleaved-thinking` as a thinking budget

@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 6aea3875, plus the base.js half of f4f06f29) — real Claude Code
+// 0.5.166 (upstream 6aea3875, plus the base.js half of f4f06f29) — real Claude Code
 // sends x-claude-code-session-id equal to metadata.user_id.session_id. kRouter sent
 // the user_id (cloaking writes one for OAuth) without the header, a fingerprint
 // mismatch. The header is derived PER REQUEST from the body the executor is about

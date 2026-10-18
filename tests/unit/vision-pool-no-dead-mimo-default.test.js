@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
- * 0.5.165 — Xiaomi ended the free MiMo channel (upstream 6d96e24b hid mimo-free;
+ * 0.5.166 — Xiaomi ended the free MiMo channel (upstream 6d96e24b hid mimo-free;
  * live on 2026-10-18 the bootstrap still hands out a JWT but chat answers
  * 401 "Invalid Token"). kRouter's vision pool was on by default with
  * mmf/mimo-auto as its implicit model, so every image request to a model or

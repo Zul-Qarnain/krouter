@@ -36,7 +36,7 @@ function sanitizeGeminiFunctionName(name) {
   return sanitized.substring(0, 64);
 }
 
-// 0.5.165 — Gemini validates functionCall id uniqueness across the WHOLE
+// 0.5.166 — Gemini validates functionCall id uniqueness across the WHOLE
 // history and rejects the entire request with 400 INVALID_ARGUMENT when one
 // repeats, but an OpenAI tool_call_id is only unique inside its own assistant
 // turn: a long agent session legitimately replays call_51859 at turn 14 and
@@ -106,7 +106,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
 
   // Build tool responses cache.
   //
-  // 0.5.165 — queued per id rather than a single value: a tool_call_id is only
+  // 0.5.166 — queued per id rather than a single value: a tool_call_id is only
   // unique inside its own assistant turn, so a long agent session can reuse one
   // id for two different tool results. A plain id -> content map keeps only the
   // LAST one, and the earlier turn would then be answered with the later turn's
@@ -177,7 +177,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
                 args: args
               }
             });
-            // 0.5.165 — the NAME travels with the pair for the same reason the id
+            // 0.5.166 — the NAME travels with the pair for the same reason the id
             // does: tcID2Name is a conversation-wide id -> name map, so a later
             // call reusing the id would otherwise rename this turn's response.
             toolCallIds.push({ origId: tc.id, emitId, name: tc.function?.name });
@@ -188,7 +188,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
           }
 
           // Check if there are actual tool responses in the next messages.
-          // 0.5.165 — an intermediate call MUST get a functionResponse even when
+          // 0.5.166 — an intermediate call MUST get a functionResponse even when
           // its result is missing or the empty string, or Gemini 400s on a call
           // with no matching response. The old truthiness test treated "" as
           // missing (upstream e7b5f09d).
@@ -280,7 +280,7 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
     }
   }
 
-  // 0.5.165 — merge adjacent same-role turns, drop empty parts, force a leading
+  // 0.5.166 — merge adjacent same-role turns, drop empty parts, force a leading
   // user turn and answer a trailing model turn (upstream 8d1db46b).
   result.contents = normalizeGeminiContents(result.contents);
   return result;
@@ -351,7 +351,7 @@ function wrapInCloudCodeEnvelope(model, geminiCLI, credentials = null, isAntigra
   };
 
   // Antigravity specific fields.
-  // 0.5.165 — the official Antigravity client omits `requestType` entirely on
+  // 0.5.166 — the official Antigravity client omits `requestType` entirely on
   // the agent (chat) path. Sending `requestType: "agent"` makes Google bucket
   // the request and answer a detail-free 429 RESOURCE_EXHAUSTED even with quota
   // available (upstream 5798b308). `image_gen` is a different bucket and keeps
@@ -393,7 +393,7 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     model: model,
     userAgent: "antigravity",
     requestId: `agent-${generateUUID()}`,
-    // 0.5.165 — no `requestType` on the agent (chat) path; see the note in
+    // 0.5.166 — no `requestType` on the agent (chat) path; see the note in
     // wrapInCloudCodeEnvelope() above (upstream 5798b308).
     request: {
       sessionId: deriveSessionId(credentials?.email || credentials?.connectionId),
@@ -512,7 +512,7 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     envelope.request.systemInstruction = { role: "user", parts: systemParts };
   }
 
-  // 0.5.165 — same normalizer as the gemini path (upstream 8d1db46b).
+  // 0.5.166 — same normalizer as the gemini path (upstream 8d1db46b).
   envelope.request.contents = normalizeGeminiContents(envelope.request.contents);
   return envelope;
 }

@@ -1,4 +1,4 @@
-// 0.5.165 — the gpt-image-* family are image models in their own right, not
+// 0.5.166 — the gpt-image-* family are image models in their own right, not
 // chat models with an "-image" suffix (upstream 832a3465, eb712ca8, 7878f53b).
 //
 // buildBody only knew the suffixed shape: it sent stripImageSuffix(model) as the

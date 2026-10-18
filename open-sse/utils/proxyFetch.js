@@ -276,7 +276,7 @@ function resolveConnectionProxyUrl(targetUrl, proxyOptions) {
   return normalizeProxyUrl(proxyUrlRaw);
 }
 
-// 0.5.165 — strictProxy is a requirement only when a proxy was intended.
+// 0.5.166 — strictProxy is a requirement only when a proxy was intended.
 // Callers that set strictProxy to mean "never replay this directly if the proxy
 // fails" must keep working with nothing configured (upstream 24664f2c).
 export function isStrictProxyIntended(proxyOptions) {
@@ -289,7 +289,7 @@ export function isStrictProxyIntended(proxyOptions) {
   );
 }
 
-// 0.5.165 — under strict, a noProxy entry exempts a host only when it belongs
+// 0.5.166 — under strict, a noProxy entry exempts a host only when it belongs
 // to a proxy configured for this request. A disabled legacy proxy's noProxy
 // stays saved on the connection and must not open a direct path (kRouter-own).
 function isConfiguredNoProxyHost(targetUrl, proxyOptions) {
@@ -298,7 +298,7 @@ function isConfiguredNoProxyHost(targetUrl, proxyOptions) {
   return shouldBypassByNoProxy(targetUrl, proxyOptions?.noProxy ?? proxyOptions?.connectionNoProxy);
 }
 
-// 0.5.165 — spreading a Headers instance yields {}, which dropped Authorization
+// 0.5.166 — spreading a Headers instance yields {}, which dropped Authorization
 // and Content-Type on relay pools and on the MITM bypass (upstream 6af26a9e).
 function toPlainHeaders(headers) {
   if (!headers) return {};
@@ -404,7 +404,7 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   const envProxyUrl = connectionProxyUrl ? null : normalizeProxyUrl(getEnvProxyUrl(targetUrl));
   const proxyUrl = connectionProxyUrl || envProxyUrl;
 
-  // 0.5.165 — strict means "never leave over the direct IP". A proxy that was
+  // 0.5.166 — strict means "never leave over the direct IP". A proxy that was
   // intended but resolved to nothing (inactive or empty pool, failed pool
   // lookup) is that case, so refuse here, before both direct paths below,
   // including the MITM bypass that dials the real IP by hand (upstream

@@ -3,7 +3,7 @@ import { CLAUDE_TOOL_SUFFIX, CC_DEFAULT_TOOLS } from "../config/appConstants.js"
 import { CLAUDE_CLI_VERSION } from "../config/providers.js";
 
 // Anthropic gates newly released models on the Claude Code version a client reports
-// (Opus 5.5 needs 2.1.280+). A stale spoof is a live 400, not cosmetic. 0.5.165 — the
+// (Opus 5.5 needs 2.1.280+). A stale spoof is a live 400, not cosmetic. 0.5.166 — the
 // version now comes from CLAUDE_CLI_VERSION so it always matches the User-Agent
 // (upstream 009cac63, 84035760).
 const CC_ENTRYPOINT = "sdk-cli";
@@ -24,14 +24,14 @@ const CLAUDE_SESSION_PREFIX = /^claude:/i;
 function generateFakeUserID(sessionId) {
   const deviceId = randomBytes(32).toString("hex");
   const accountUuid = randomUUID();
-  // 0.5.165 — a "claude:"-scoped id is not a Claude Code session id (upstream 6aea3875).
+  // 0.5.166 — a "claude:"-scoped id is not a Claude Code session id (upstream 6aea3875).
   const cleanSessionId = typeof sessionId === "string" ? sessionId.replace(CLAUDE_SESSION_PREFIX, "").trim() : null;
   const sessionUuid = cleanSessionId || randomUUID();
   return `{"device_id":"${deviceId}","account_uuid":"${accountUuid}","session_id":"${sessionUuid}"}`;
 }
 
 /**
- * 0.5.165 (upstream 6aea3875) — the session id a Claude Code request carries in
+ * 0.5.166 (upstream 6aea3875) — the session id a Claude Code request carries in
  * metadata.user_id: the JSON form's session_id, or the legacy plain string. Real
  * Claude Code sends the same value as x-claude-code-session-id.
  * @param {unknown} userId - body.metadata.user_id
@@ -108,7 +108,7 @@ export function cloakClaudeTools(body) {
   };
 }
 
-// 0.5.165 (upstream b65d2d0a) — last-resort decloak when a name is not in the map
+// 0.5.166 (upstream b65d2d0a) — last-resort decloak when a name is not in the map
 // (the map is lost across a retried or reconnected stream): strip the literal
 // suffix. CC decoy names are sent unsuffixed and stay as they are, so the client
 // still sees "tool unavailable" for them.
@@ -120,7 +120,7 @@ function stripCloakSuffix(name) {
 }
 
 /**
- * 0.5.165 — did kRouter cloak this request? Mirrors the gate in translator/index.js:
+ * 0.5.166 — did kRouter cloak this request? Mirrors the gate in translator/index.js:
  * only provider "claude" with an OAuth token is cloaked. The suffix ("_ide") is short
  * enough to end a client's own tool name, so the last-resort strip below must never
  * run on a request kRouter did not cloak.

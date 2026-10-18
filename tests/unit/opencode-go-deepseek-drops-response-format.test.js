@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 468aa7d9) — OpenCode Go's relay answers 400 for every
+// 0.5.166 (upstream 468aa7d9) — OpenCode Go's relay answers 400 for every
 // `response_format` on its deepseek family (both json_schema and json_object)
 // while serving it for glm / kimi / mimo / minimax / qwen / grok on the same
 // relay. The rejection body is a bare model echo ({"model":"deepseek-v4.1-flash"})

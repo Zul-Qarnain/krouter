@@ -53,7 +53,7 @@ describe("AUDIT-002: API key masking", () => {
       path.resolve("src/lib/db/repos/usageRepo.js"),
       "utf-8"
     );
-    // 0.5.165 — the masked key collided for every key sharing the sk-{machineId}
+    // 0.5.166 — the masked key collided for every key sharing the sk-{machineId}
     // prefix (upstream a406381f), so buckets are now keyed by a one-way ref of the
     // full key. The raw key must still never become a map key (behaviour is
     // covered end to end in usage-api-key-attribution.test.js).

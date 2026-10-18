@@ -180,7 +180,7 @@ export async function handleImageGenerationCore({
         log,
         streamToClient,
         onRequestSuccess,
-        // 0.5.165 (upstream e10da160) — adapters that see a provider-reported
+        // 0.5.166 (upstream e10da160) — adapters that see a provider-reported
         // token count hand it back here so the request lands on the usage page.
         onUsage,
         url,

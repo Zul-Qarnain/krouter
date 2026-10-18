@@ -1,4 +1,4 @@
-// 0.5.165 — the cx catalog had drifted off ChatGPT's live roster completely.
+// 0.5.166 — the cx catalog had drifted off ChatGPT's live roster completely.
 //
 // backend-api/codex/models no longer lists gpt-5.5 (which was kRouter's cx
 // default), gpt-5.4, gpt-5.4-mini or gpt-5.3-codex-spark for ChatGPT sign-in;

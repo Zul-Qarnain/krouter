@@ -1,4 +1,4 @@
-// 0.5.165 (kRouter-own) — a 429 that says "rate limit" AND carries a precise
+// 0.5.166 (kRouter-own) — a 429 that says "rate limit" AND carries a precise
 // reset (Codex usage_limit_reached resets_at, a Retry-After, Google retryDelay)
 // was cut to the 90s TPM lock whenever the quota cache looked healthy, and that
 // cache fails open when it is cold. The provider told us when the model comes

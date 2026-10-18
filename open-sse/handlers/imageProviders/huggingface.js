@@ -1,6 +1,6 @@
 // HuggingFace Inference Providers router — returns binary image
 //
-// 0.5.165 — the legacy `api-inference.huggingface.co` host no longer resolves
+// 0.5.166 — the legacy `api-inference.huggingface.co` host no longer resolves
 // (DNS ENOTFOUND), so every HuggingFace image request died at the fetch layer.
 // The replacement is the Inference Providers router, a switchboard in front of
 // many inference providers addressed as `<base>/<provider>/<providerModelId>`.
@@ -70,7 +70,7 @@ function customBaseUrl(creds) {
   return typeof url === "string" && url.trim() ? url.trim().replace(/\/+$/, "") : null;
 }
 
-// 0.5.165 — a source-image URL is client-supplied and fetched by the server, so
+// 0.5.166 — a source-image URL is client-supplied and fetched by the server, so
 // it is an SSRF vector: `"image": "http://169.254.169.254/latest/meta-data/..."`
 // would make kRouter read a link-local metadata endpoint and base64 the reply
 // into the payload it POSTs to HuggingFace — read access to anything the host

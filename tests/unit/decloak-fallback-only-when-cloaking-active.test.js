@@ -1,5 +1,5 @@
 /**
- * 0.5.165 — the last-resort decloak (strip a trailing CLAUDE_TOOL_SUFFIX when the
+ * 0.5.166 — the last-resort decloak (strip a trailing CLAUDE_TOOL_SUFFIX when the
  * tool name is not in the map, upstream b65d2d0a) must only fire when kRouter
  * actually cloaked this request.
  *

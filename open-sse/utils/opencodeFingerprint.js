@@ -1,7 +1,7 @@
 /**
  * Helpers for the OpenCode free-tier client fingerprint.
  *
- * 0.5.165 (upstream 5bdcd5e7, e964e482) — OpenCode Free gates /inference/v1 on the
+ * 0.5.166 (upstream 5bdcd5e7, e964e482) — OpenCode Free gates /inference/v1 on the
  * v2 CLI's fingerprint. Live probes on 2026-10-18 (no account needed, the tier is
  * `Bearer public`):
  *   - a request with no tools at all             -> 403 FreeTierError

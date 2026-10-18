@@ -1,4 +1,4 @@
-// 0.5.165 — Codex 0.155 introduced a second Responses request shape for the
+// 0.5.166 — Codex 0.155 introduced a second Responses request shape for the
 // GPT-6 Sol/Luna family, "Responses Lite" (upstream 95600db1, 7bf93178).
 //
 // Those models are served behind the x-openai-internal-codex-responses-lite

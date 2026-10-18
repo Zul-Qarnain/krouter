@@ -19,7 +19,7 @@ function isLockRunning(value, nowMs) {
   return Number.isFinite(untilMs) && untilMs > nowMs;
 }
 
-// 0.5.165 — a re-login or a validated key edit says testStatus "active" but merged
+// 0.5.166 — a re-login or a validated key edit says testStatus "active" but merged
 // over the old row, keeping every modelLock_*, backoffLevel, rateLimitedUntil and
 // errorCode, so the fresh account stayed skipped until Test connection (upstream
 // 7fee56ba). Drop them. A hold a new login does not lift stays, with the status that
@@ -54,7 +54,7 @@ function resetHealthStateOnActivation(existing, patch) {
   };
 }
 
-// 0.5.165 — adding a key under a name the provider already has used to replace the
+// 0.5.166 — adding a key under a name the provider already has used to replace the
 // stored key silently. Typed so POST /api/providers can answer 409 (upstream 239bcfc5).
 function nameConflictError(existing, provider) {
   const err = new Error(
@@ -141,7 +141,7 @@ function reorderInTx(db, providerId) {
     return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
   });
   list.forEach((c, i) => {
-    // 0.5.165 — write only the rows whose position changed (upstream 239bcfc5).
+    // 0.5.166 — write only the rows whose position changed (upstream 239bcfc5).
     if ((c.priority || 0) !== i + 1) {
       db.run(`UPDATE providerConnections SET priority = ? WHERE id = ?`, [i + 1, c.id]);
     }
@@ -151,13 +151,13 @@ function reorderInTx(db, providerId) {
 export async function createProviderConnection(data) {
   const db = await getAdapter();
   const now = new Date().toISOString();
-  // 0.5.165 — caller flags, never stored: allowOverwrite / the id of the row being
+  // 0.5.166 — caller flags, never stored: allowOverwrite / the id of the row being
   // edited permit replacing an apikey row that has the same name.
   const { allowOverwrite, id: editId, ...fields } = data;
   let result;
 
   db.transaction(() => {
-    // 0.5.165 — an apikey row is deduped by name only, so look up that name instead
+    // 0.5.166 — an apikey row is deduped by name only, so look up that name instead
     // of loading the whole pool on every insert (upstream 239bcfc5, #4311). OAuth
     // still scans: its identity rules compare fields inside providerSpecificData.
     const isNamedApikey = data.authType === "apikey" && !!data.name;
@@ -201,7 +201,7 @@ export async function createProviderConnection(data) {
     const hasExplicitPriority = !!data.priority;
     let connectionPriority = data.priority;
     if (!hasExplicitPriority) {
-      // 0.5.165 — MAX(priority)+1 from the (provider, priority) index: the apikey
+      // 0.5.166 — MAX(priority)+1 from the (provider, priority) index: the apikey
       // path no longer has the pool in memory.
       const maxRow = db.get(`SELECT MAX(priority) AS m FROM providerConnections WHERE provider = ?`, [data.provider]);
       connectionPriority = (maxRow?.m || 0) + 1;
@@ -226,7 +226,7 @@ export async function createProviderConnection(data) {
     if (data.email !== undefined) conn.email = data.email;
 
     upsert(db, conn);
-    // 0.5.165 — MAX+1 already sorts last, so the full-pool renumber (~2N statements
+    // 0.5.166 — MAX+1 already sorts last, so the full-pool renumber (~2N statements
     // per insert, O(n*m) for a bulk import) runs only when the caller placed the row,
     // e.g. the dashboard's priority 1 = first.
     if (hasExplicitPriority) reorderInTx(db, data.provider);
@@ -237,7 +237,7 @@ export async function createProviderConnection(data) {
 }
 
 // Critical: OAuth refresh token race — atomic merge inside transaction.
-// 0.5.165 — { reactivate: true } (a validated edit) also drops the stale health state
+// 0.5.166 — { reactivate: true } (a validated edit) also drops the stale health state
 // when data says testStatus "active". Opt-in: a successful request (clearAccountError)
 // and a mid-request token refresh also write "active" and must keep other models' locks.
 export async function updateProviderConnection(id, data, { reactivate = false } = {}) {

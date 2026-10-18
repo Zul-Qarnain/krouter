@@ -2,7 +2,7 @@
  * Tool normalization before dispatch:
  * - Strip built-in tools when equivalent MCP tools are present (Claude clients
  *   only; reduces tool-definition token bloat).
- * - 0.5.165 — drop later same-name tools for DeepSeek models. DeepSeek answers 400
+ * - 0.5.166 — drop later same-name tools for DeepSeek models. DeepSeek answers 400
  *   "Tool names must be unique" on every endpoint that serves it; first definition
  *   wins, and tool_choice / history refer by name or id, so nothing else changes
  *   (upstream 7f5bd155).

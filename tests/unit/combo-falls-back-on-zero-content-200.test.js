@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 8f4e3800) — a combo seat that answers HTTP 200 with no
+// 0.5.166 (upstream 8f4e3800) — a combo seat that answers HTTP 200 with no
 // content, no tool calls and no reasoning, and with no real finish (missing,
 // in_progress or incomplete), gave the client an empty answer although later
 // members could have answered. On a non-final seat that now falls through.

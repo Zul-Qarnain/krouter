@@ -16,7 +16,7 @@ import { detectEmptyCompletion, readCompletionShape, EMPTY_COMPLETION_STATUS } f
 
 
 
-// 0.5.165 — Cline (api.cline.bot) wraps a non-streaming completion in
+// 0.5.166 — Cline (api.cline.bot) wraps a non-streaming completion in
 // {"success":true,"data":{...choices...}}; clients and the dashboard model test found
 // no `choices` (upstream 122f23ee). Opt-in by provider so no other body is ever
 // rewritten; the error envelope ({"success":false,...}) never matches.
@@ -162,7 +162,7 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
       }
     }
 
-    // 0.5.165 — a refusal's explanation becomes the text, as the streaming path sends it.
+    // 0.5.166 — a refusal's explanation becomes the text, as the streaming path sends it.
     const refusalNote = refusalExplanation(responseBody);
     if (refusalNote) textContent += refusalNote;
 
@@ -172,7 +172,7 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
     if (toolCalls.length > 0) message.tool_calls = toolCalls;
     if (!message.content && !message.tool_calls) message.content = "";
 
-    // 0.5.165 — the streaming mapping, so max_tokens -> length and refusal ->
+    // 0.5.166 — the streaming mapping, so max_tokens -> length and refusal ->
     // content_filter instead of raw Claude values no OpenAI client knows (upstream 0f488c70).
     const finishReason = convertStopReason(responseBody.stop_reason || "end_turn");
 
@@ -221,7 +221,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     // failure, not a 200 whose content is the error text.
     if (parsed.error) {
       const code = String(parsed.error.code || parsed.error.type || "");
-      // 0.5.165 — an explicit upstream 4xx/5xx on the chunk wins, as in sseToJsonHandler.
+      // 0.5.166 — an explicit upstream 4xx/5xx on the chunk wins, as in sseToJsonHandler.
       const status = streamErrorStatus(parsed.error, /rate_limit|quota/i.test(code) ? HTTP_STATUS.RATE_LIMITED : HTTP_STATUS.BAD_GATEWAY);
       appendLog({ status: `FAILED ${status}` });
       return createErrorResult(status, parsed.error.message || "Upstream stream failed");
@@ -237,7 +237,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     }
   }
 
-  // Before anything reads choices or usage (0.5.165, see unwrapClineEnvelope).
+  // Before anything reads choices or usage (0.5.166, see unwrapClineEnvelope).
   responseBody = unwrapClineEnvelope(responseBody, provider);
 
   reqLogger.logProviderResponse(providerResponse.status, providerResponse.statusText, providerResponse.headers, responseBody);

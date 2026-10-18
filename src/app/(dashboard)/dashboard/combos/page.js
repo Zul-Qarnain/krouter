@@ -16,7 +16,7 @@ const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
 // models per input-modality capability. A request needing a capability the target
 // model/combo lacks switches to the first enabled model here instead of dropping the
 // media.
-// 0.5.165 — no default model: the old mmf/mimo-auto default is a dead channel
+// 0.5.166 — no default model: the old mmf/mimo-auto default is a dead channel
 // (upstream 6d96e24b), so an empty pool does nothing and says so.
 const CAPACITY_ADAPTER_CAPS = [
   { key: "vision", label: "Vision", icon: "visibility", desc: "Images", emptyHint: "Pick a vision model. Image requests are not rerouted until you add one." },

@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 6b9dc54d) — cli-chat-proxy.grok.com answers HTTP 426
+// 0.5.166 (upstream 6b9dc54d) — cli-chat-proxy.grok.com answers HTTP 426
 // "Upgrade Required" to any Grok CLI identity below 1.0.13. kRouter sent 0.2.99,
 // so every grok-cli request failed. The version is single-sourced in
 // open-sse/config/grokCli.js; these assertions pin both the floor and the

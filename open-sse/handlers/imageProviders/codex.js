@@ -5,14 +5,14 @@ import { CODEX_CLI_VERSION } from "../../config/providers.js";
 import { getProviderModels } from "../../config/providerModels.js";
 
 const CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
-// 0.5.165 — these two were pinned at 0.136.0 of their own accord while the chat
+// 0.5.166 — these two were pinned at 0.136.0 of their own accord while the chat
 // transport moved on; one constant now feeds every Codex identity header
 // (upstream a7047a07, ca6e8407).
 const CODEX_USER_AGENT = `codex_cli_rs/${CODEX_CLI_VERSION}`;
 const CODEX_ORIGINATOR = "codex_cli_rs";
 const CODEX_MODEL_SUFFIX = "-image";
 const CODEX_REF_DETAIL = "high";
-// 0.5.165 — the chat model every standalone gpt-image-* request runs on. gpt-5.5,
+// 0.5.166 — the chat model every standalone gpt-image-* request runs on. gpt-5.5,
 // upstream's original choice, was retired from ChatGPT sign-in on 2026-10-14 and
 // now answers 400 (upstream 832a3465, eb712ca8, 7878f53b).
 // tests/unit/codex-image-models-run-on-a-chat-model.test.js fails if the cx
@@ -71,7 +71,7 @@ function buildContent(prompt, refs, detail = CODEX_REF_DETAIL) {
   return content;
 }
 
-// 0.5.165 — the exact usage Codex reports on response.completed, in the shape
+// 0.5.166 — the exact usage Codex reports on response.completed, in the shape
 // saveRequestUsage already understands (upstream e10da160). Anything that is not
 // a whole, non-negative token count is dropped rather than recorded as a guess.
 function normalizeResponsesUsage(raw) {

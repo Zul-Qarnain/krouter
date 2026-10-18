@@ -5,7 +5,7 @@
 import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 
-// 0.5.165 — Chat Completions usage -> Responses usage for response.completed. Without
+// 0.5.166 — Chat Completions usage -> Responses usage for response.completed. Without
 // it Codex CLI keeps its context gauge at 0 and never auto-compacts (upstream da004655,
 // 7111db35). Stored in state.responsesUsage, never state.usage: the stream layer owns
 // state.usage for billing (finalizeStream) in normalizeUsage() shape. Zeroed
@@ -41,7 +41,7 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     return flushEvents(state);
   }
 
-  // 0.5.165 — capture usage before the choices guard: OpenAI sends it on a trailer
+  // 0.5.166 — capture usage before the choices guard: OpenAI sends it on a trailer
   // whose choices array is empty, which the guard used to drop (upstream da004655).
   const responseUsage = toResponsesUsage(chunk.usage);
   if (responseUsage) state.responsesUsage = responseUsage;
@@ -123,7 +123,7 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     }
 
     if (content) {
-      // 0.5.165 — the answer starts, so thinking is over. reasoning_content upstreams
+      // 0.5.166 — the answer starts, so thinking is over. reasoning_content upstreams
       // (and Claude, now that claude-to-openai sends no "</think>") never close it any
       // other way, so the reasoning item ended after the message (upstream 5d2cfbf3).
       closeReasoning(state, emit);
@@ -134,7 +134,7 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
   // Handle tool_calls (an empty array is truthy — require a real call, otherwise
   // we closed the message early and truncated the assistant text). upstream 10a923da
   if (delta.tool_calls && delta.tool_calls.length) {
-    closeReasoning(state, emit); // 0.5.165 — same as text (upstream 5d2cfbf3)
+    closeReasoning(state, emit); // 0.5.166 — same as text (upstream 5d2cfbf3)
     closeMessage(state, emit, idx);
     for (const tc of delta.tool_calls) {
       emitToolCall(state, emit, tc);
@@ -146,7 +146,7 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     for (const i in state.msgItemAdded) closeMessage(state, emit, i);
     closeReasoning(state, emit);
     for (const i in state.funcCallIds) closeToolCall(state, emit, i);
-    // 0.5.165 — usage often arrives after finish_reason, on its own trailer chunk.
+    // 0.5.166 — usage often arrives after finish_reason, on its own trailer chunk.
     // Completing here would freeze response.completed without it, so on the direct
     // openai -> openai-responses route we wait; the trailer, [DONE], end of stream or
     // the stream.js watchdog completes it. A pivot (claude/gemini/kiro -> openai ->
@@ -374,7 +374,7 @@ function closeToolCall(state, emit, idx) {
   }
 }
 
-// 0.5.165 — response.completed carries the finished Response, so its output has to
+// 0.5.166 — response.completed carries the finished Response, so its output has to
 // repeat every item already sent in response.output_item.done. GitHub Copilot CLI and
 // the OpenAI SDK final-response helpers build the turn from the terminal event and
 // saw it empty (upstream 273f0c32). Adapted: keyed by item id in close order, not by

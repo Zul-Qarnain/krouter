@@ -28,7 +28,7 @@ export function claudeToOpenAIResponse(chunk, state) {
       state.messageId = chunk.message?.id || `msg_${Date.now()}`;
       state.model = chunk.message?.model;
       state.toolCallIndex = 0;
-      // 0.5.165 — Anthropic reports the prompt side (input + both cache buckets) here;
+      // 0.5.166 — Anthropic reports the prompt side (input + both cache buckets) here;
       // some Claude-shaped upstreams then send only output_tokens in message_delta, so
       // the final chunk said prompt_tokens 0 and a Codex client on a Claude connection
       // never learned its context size (upstream 54e3245a, needed by 7111db35). Kept
@@ -46,7 +46,7 @@ export function claudeToOpenAIResponse(chunk, state) {
         state.serverToolBlockIndex = chunk.index;
         break;
       }
-      // 0.5.165 — no "<think>"/"</think>" markers in delta.content: thinking travels
+      // 0.5.166 — no "<think>"/"</think>" markers in delta.content: thinking travels
       // only in reasoning_content, and OpenAI clients rendered the empty pair as literal
       // text above every answer (upstream 5d2cfbf3).
       if (block?.type === "text") {
@@ -109,7 +109,7 @@ export function claudeToOpenAIResponse(chunk, state) {
       // Extract usage from message_delta event (Claude native format)
       // Normalize to OpenAI format (prompt_tokens/completion_tokens) for consistent logging
       if (chunk.usage && typeof chunk.usage === "object") {
-        // 0.5.165 — a count the delta omits falls back to message_start's (see above).
+        // 0.5.166 — a count the delta omits falls back to message_start's (see above).
         const start = state.claudeStartUsage || {};
         const count = (key) => typeof chunk.usage[key] === "number" ? chunk.usage[key]
           : typeof start[key] === "number" ? start[key] : 0;
@@ -135,7 +135,7 @@ export function claudeToOpenAIResponse(chunk, state) {
 
       if (chunk.delta?.stop_reason) {
         state.finishReason = convertStopReason(chunk.delta.stop_reason);
-        // 0.5.165 — a refusal has no content blocks at all; send Anthropic's own
+        // 0.5.166 — a refusal has no content blocks at all; send Anthropic's own
         // explanation as the text so the client shows why the turn is empty (upstream 0f488c70).
         const refusalNote = refusalExplanation(chunk.delta);
         if (refusalNote) results.push(createChunk(state, { content: refusalNote }));
@@ -201,7 +201,7 @@ export function claudeToOpenAIResponse(chunk, state) {
 }
 
 // Convert Claude stop_reason to OpenAI finish_reason.
-// 0.5.165 — exported so the non-streaming path maps identically (it leaked raw
+// 0.5.166 — exported so the non-streaming path maps identically (it leaked raw
 // "max_tokens"/"refusal"). "refusal" is a blocked turn, not a clean stop: as "stop"
 // an OpenAI client could not tell it from a real, empty answer (upstream 0f488c70).
 export function convertStopReason(reason) {

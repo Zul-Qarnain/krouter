@@ -13,7 +13,7 @@ import {
   resolveDefaultProfileArn
 } from "../../config/kiroConstants.js";
 
-// 0.5.165 — Kiro rejects an empty user turn, so a turn that only carries tool
+// 0.5.166 — Kiro rejects an empty user turn, so a turn that only carries tool
 // results needs placeholder text. "continue" reads like a new instruction:
 // models answer the word itself and drop the task in progress (upstream 82b1bca4).
 const KIRO_TOOL_RESULTS_PLACEHOLDER = "Tool results provided.";

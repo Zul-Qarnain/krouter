@@ -124,7 +124,7 @@ async function readResponsePrefix(response, signal, maxBytes, timeoutMs) {
   return decoder.decode(concatChunks(chunks, totalBytes));
 }
 
-// 0.5.165 — the instruction rides in the current user turn, never in a top-level
+// 0.5.166 — the instruction rides in the current user turn, never in a top-level
 // `systemPrompt`: kiro.dev answers any body carrying that field with a terminal
 // 400 REQUEST_BODY_INVALID, so every repair retry was a hard failure (upstream 1892ed77).
 function appendRepairInstruction(body, kind) {
@@ -146,7 +146,7 @@ function normalizeStopReason(value) {
   return reason || null;
 }
 
-// 0.5.165 — of the reasons stopDisposition() folds into "terminal_incomplete", only
+// 0.5.166 — of the reasons stopDisposition() folds into "terminal_incomplete", only
 // these mean "usable as far as it got, then the budget ran out", which is what
 // finish_reason "length" is for. cancelled / pause_turn are abandoned turns whose
 // partial content stays private, so they are deliberately absent (upstream b44bb09f).
@@ -718,7 +718,7 @@ export class KiroExecutor extends BaseExecutor {
     };
     const emitTools = (controller) => {
       for (const tool of state.tools.values()) {
-        // 0.5.165 — validate per tool, not per turn: one unusable call used to
+        // 0.5.166 — validate per tool, not per turn: one unusable call used to
         // throw out of the loop and take every complete call with it (upstream b44bb09f).
         let input;
         try {
@@ -741,14 +741,14 @@ export class KiroExecutor extends BaseExecutor {
         emitDelta(controller, {
           tool_calls: [{ index, function: { arguments: serializedInput } }]
         });
-        // 0.5.165 — tool arguments are billed output too; without this the /4
+        // 0.5.166 — tool arguments are billed output too; without this the /4
         // estimator in finish() reported OUT 0/1 for a tool-only turn (upstream b44bb09f).
         state.totalContentLength += tool.name.length + serializedInput.length;
         state.hasToolCalls = true;
       }
       state.tools.clear();
       state.bufferedToolBytes = 0;
-      // 0.5.165 — a declared tool turn with no usable call is fatal only when the
+      // 0.5.166 — a declared tool turn with no usable call is fatal only when the
       // turn produced nothing else (upstream b44bb09f).
       if (state.stopReason === "tool_use" && !state.hasToolCalls && !hasSemanticOutput()) {
         throw new Error("Kiro tool_use stop reason did not include a complete tool call");
@@ -921,7 +921,7 @@ export class KiroExecutor extends BaseExecutor {
         } catch (error) {
           const bufferExceeded = error.code === "KIRO_BUFFER_EXCEEDED";
           if (!bufferExceeded) {
-            // 0.5.165 — the rejected fragment belongs to one tool; clearing the
+            // 0.5.166 — the rejected fragment belongs to one tool; clearing the
             // map dropped the complete calls too. emitTools() drops only the
             // unusable ones (upstream b44bb09f).
             state.toolValidationError ||= error.message;
@@ -957,7 +957,7 @@ export class KiroExecutor extends BaseExecutor {
       }
       state.transportState = "clean_eof";
       const declaredDisposition = stopDisposition(state.stopReason, state.sawToolUse);
-      // 0.5.165 — a context-window / max_tokens stop after real output keeps that
+      // 0.5.166 — a context-window / max_tokens stop after real output keeps that
       // output and closes as "length" instead of failing the whole turn. Keyed on
       // semantic output, not chunkIndex (empty content deltas are not an answer),
       // so a truncation that produced nothing still fails closed (upstream b44bb09f).
@@ -996,7 +996,7 @@ export class KiroExecutor extends BaseExecutor {
         );
         return;
       }
-      // 0.5.165 — a rejected tool is fatal only when nothing usable is left. This
+      // 0.5.166 — a rejected tool is fatal only when nothing usable is left. This
       // runs AFTER emitTools(), which drops just the unusable calls; a turn that
       // also produced text or a valid call keeps it (upstream b44bb09f).
       if (state.toolValidationError && !state.hasToolCalls && !hasSemanticOutput()) {
@@ -1076,7 +1076,7 @@ export class KiroExecutor extends BaseExecutor {
       options.onTerminalState?.(diagnostics({
         terminal_provenance: state.terminalProvenance || "clean_eventstream_eof",
         transport_state: state.transportState,
-        // 0.5.165 — report what this exit did: the integrity gate re-derives its
+        // 0.5.166 — report what this exit did: the integrity gate re-derives its
         // verdict from stop_disposition, and "terminal_incomplete" would make it
         // discard the turn we just kept (upstream b44bb09f).
         stop_disposition: truncatedAfterOutput ? "length" : disposition

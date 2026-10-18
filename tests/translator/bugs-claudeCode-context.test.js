@@ -55,7 +55,7 @@ describe("Claude Code CLI context → OpenAI", () => {
   });
 
   // claude-to-openai.js tool_result — image block stringified into raw JSON.
-  // Fixed in 0.5.165 (upstream f4f06f29): the image moves to the following user message.
+  // Fixed in 0.5.166 (upstream f4f06f29): the image moves to the following user message.
   it("tool_result image block is preserved", () => {
     const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
       messages: [

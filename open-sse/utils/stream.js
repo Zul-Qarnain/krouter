@@ -19,7 +19,7 @@ const STREAM_MODE = {
   PASSTHROUGH: "passthrough" // No translation, normalize output, extract usage
 };
 
-// 0.5.165 — upper bound on the deferred response.completed wait. A chat -> responses
+// 0.5.166 — upper bound on the deferred response.completed wait. A chat -> responses
 // stream that saw finish_reason without usage must not hold the client's terminal
 // event forever when the upstream stalls with no usage trailer and no [DONE]
 // (upstream fbcaa282).
@@ -61,10 +61,10 @@ export function createSSEStream(options = {}) {
   // Per-stream decoder with stream:true to correctly handle multi-byte chars split across chunks
   const decoder = new TextDecoder("utf-8", { fatal: false });
 
-  // 0.5.165 — targetFormat (the upstream's format) rides in the state so a response
+  // 0.5.166 — targetFormat (the upstream's format) rides in the state so a response
   // translator can tell the direct route from the second hop of a pivot, which never
   // receives the terminal null chunk (upstream da004655).
-  // 0.5.165 — cloakActive lets the decloak fallback fire only on requests kRouter cloaked.
+  // 0.5.166 — cloakActive lets the decloak fallback fire only on requests kRouter cloaked.
   const state = mode === STREAM_MODE.TRANSLATE
     ? { ...initState(sourceFormat), provider, toolNameMap, model, targetFormat, cloakActive }
     : null;
@@ -119,7 +119,7 @@ export function createSSEStream(options = {}) {
     }
   };
 
-  // 0.5.165 — emit the deferred response.completed now: at [DONE], or when the
+  // 0.5.166 — emit the deferred response.completed now: at [DONE], or when the
   // watchdog gives up on a usage trailer that never comes. Billing runs here too,
   // since Codex closes the socket on response.completed and flush() never runs
   // (upstream 7111db35, fbcaa282).
@@ -269,7 +269,7 @@ export function createSSEStream(options = {}) {
         // For Ollama: done=true is the final chunk with finish_reason/usage, must translate
         // For other formats: done=true is the [DONE] sentinel, skip
         if (parsed && parsed.done && targetFormat !== FORMATS.OLLAMA) {
-          // 0.5.165 — [DONE] ends the wait for a usage trailer even if the upstream holds
+          // 0.5.166 — [DONE] ends the wait for a usage trailer even if the upstream holds
           // the connection open: complete before the sentinel (upstream 7111db35).
           if (defersResponsesCompletion && state.completionPending && !state.completedSent) {
             flushPendingCompletion(controller);
@@ -386,13 +386,13 @@ export function createSSEStream(options = {}) {
           }
         }
 
-        // 0.5.165 — a translated Responses stream just sent response.completed. Codex
+        // 0.5.166 — a translated Responses stream just sent response.completed. Codex
         // closes the socket on it, which cancels the reader so flush() never bills the
         // request; record usage now, as the same-format path above already does.
         if (sourceFormat === FORMATS.OPENAI_RESPONSES && state.completedSent) finalizeStream();
       }
 
-      // 0.5.165 — the deferral can outlive the upstream: a broken chat upstream may stall
+      // 0.5.166 — the deferral can outlive the upstream: a broken chat upstream may stall
       // after finish_reason with no usage trailer and no [DONE]. Bound the wait so the
       // client still gets its terminal event (upstream fbcaa282).
       if (defersResponsesCompletion && state.completionPending && !state.completedSent && !completionFlushTimer) {

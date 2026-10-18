@@ -27,7 +27,7 @@
 //   - OpenAI chat format: content[].type === "image_url" → removed
 //   - Gemini contents format: parts[].inlineData / parts[].fileData → removed
 //   - Message-level msg.images[] and image attachments (Ollama/Hermes,
-//     Vercel AI SDK) → removed (0.5.165)
+//     Vercel AI SDK) → removed (0.5.166)
 //   - If a message becomes empty after stripping, it's replaced with a tiny
 //     marker so the upstream doesn't 400 on empty content.
 
@@ -126,7 +126,7 @@ function isImageAttachment(att) {
   return typeof att.url === "string" && att.url.startsWith("data:image/");
 }
 
-// 0.5.165 — Ollama/Hermes `images[]` and Vercel-AI-SDK image attachments ride
+// 0.5.166 — Ollama/Hermes `images[]` and Vercel-AI-SDK image attachments ride
 // beside content, so filtering content blocks alone still sent the image to a
 // text-only model (upstream 345cdcf6, strip half). Returns a new message, or the
 // same one when there is nothing to drop.

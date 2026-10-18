@@ -110,7 +110,7 @@ function getGroupKey(item, keyField) {
   switch (keyField) {
     case "rawModel": return item.rawModel || "Unknown Model";
     case "accountName": return item.accountName || `Account ${item.connectionId?.slice(0, 8)}...` || "Unknown Account";
-    // 0.5.165 — name + mask: same-named (or unnamed) keys are separate buckets now,
+    // 0.5.166 — name + mask: same-named (or unnamed) keys are separate buckets now,
     // grouping on the name alone merged them again (upstream 813a0121).
     // An unnamed key is already named by its mask, so it is not repeated.
     case "keyName": {
@@ -233,7 +233,7 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
         const unique = (d?.connections || []).filter((c) => {
           if (c.isActive === false) return false;
           if (!isLLMProvider(c.provider)) return false;
-          // 0.5.165 — retired (hidden) providers get no filter chip (upstream dcc6a205).
+          // 0.5.166 — retired (hidden) providers get no filter chip (upstream dcc6a205).
           if (AI_PROVIDERS[c.provider]?.hidden) return false;
           if (seen.has(c.provider)) return false;
           seen.add(c.provider);

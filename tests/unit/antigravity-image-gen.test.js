@@ -138,7 +138,7 @@ describe("Antigravity executor — image model handling", () => {
       { request: { contents: [{ role: "user", parts: [{ text: "hi" }] }] } },
       false, creds,
     );
-    // 0.5.165 — the chat path no longer carries requestType at all; sending
+    // 0.5.166 — the chat path no longer carries requestType at all; sending
     // "agent" drew a fake 429 RESOURCE_EXHAUSTED (upstream 5798b308). Only the
     // image path keeps one. See antigravity-no-agent-request-type.test.js.
     expect(out.requestType).toBeUndefined();

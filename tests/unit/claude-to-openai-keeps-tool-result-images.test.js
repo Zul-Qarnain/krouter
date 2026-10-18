@@ -1,4 +1,4 @@
-// 0.5.165 (upstream f4f06f29, OpenAI half) — an image returned inside a Claude
+// 0.5.166 (upstream f4f06f29, OpenAI half) — an image returned inside a Claude
 // tool_result (an MCP screenshot tool, say) was JSON-stringified into the OpenAI
 // tool message: the model got a wall of base64 text instead of the picture. The
 // OpenAI tool role is text-only, so the image now rides in the user message that

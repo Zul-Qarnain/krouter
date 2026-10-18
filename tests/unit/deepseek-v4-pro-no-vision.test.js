@@ -11,7 +11,7 @@ describe("deepseek-v4-pro is text-only", () => {
     expect(getCapabilitiesForModel(provider, "deepseek-v4-pro").vision).toBe(false);
   });
 
-  // 0.5.165 — thinkingCanDisable and maxOutput follow the gateway's 2026-09-30
+  // 0.5.166 — thinkingCanDisable and maxOutput follow the gateway's 2026-09-30
   // product-config snapshot (upstream 63de82b8). canDisableThinking is NOT the
   // inverse of onlyReasoning: V4 Pro thinks by default but CAN be told not to, and
   // its real output cap is 393216, not the 48000-era 50000 guess.

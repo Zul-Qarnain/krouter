@@ -409,13 +409,13 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
     if (data.models) {
       // Filter only recommended/important models (must match PROVIDER_MODELS ag ids)
       const importantModels = [
-        // 0.5.165 — Gemini 4 Argon. Upstream's own quota list omits it even
+        // 0.5.166 — Gemini 4 Argon. Upstream's own quota list omits it even
         // though its registry routes the model, which is the same drift that
         // lost gemini-3.1-flash-image below. kRouter charts every ag catalog id
         // instead; the entry is inert until Google reports the bucket.
         // (upstream 29fc880e)
         'gemini-4-argon-high',
-        // 0.5.165 — Gemini Flash tiers Google serves today. Without these the
+        // 0.5.166 — Gemini Flash tiers Google serves today. Without these the
         // quota bars simply did not render. (upstream 70f15aa5, 86694ed8, 42c691b3)
         'gemini-3.8-flash-high',
         'gemini-3.8-flash-medium',
@@ -429,11 +429,11 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
         'gemini-3-flash-agent',
         'gemini-3.5-flash-low',
         'gemini-3.5-flash-extra-low',
-        // 0.5.165 — gemini-3.1-pro-high (upstream 24034f69)
+        // 0.5.166 — gemini-3.1-pro-high (upstream 24034f69)
         'gemini-3.1-pro-high',
         'gemini-pro-agent',
         'gemini-3.1-pro-low',
-        // 0.5.165 — Claude 5.5 tiers on Antigravity (upstream a07ed95b)
+        // 0.5.166 — Claude 5.5 tiers on Antigravity (upstream a07ed95b)
         'claude-sonnet-5-5-high',
         'claude-sonnet-5-5-medium',
         'claude-sonnet-5-5-low',
@@ -446,7 +446,7 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
         'claude-opus-4-6-thinking',
         'gpt-oss-120b-medium',
         'gemini-3-flash',
-        // 0.5.165 — in the ag catalog since 0.5.107 but never added here, so
+        // 0.5.166 — in the ag catalog since 0.5.107 but never added here, so
         // its quota bar never rendered. (upstream 5306bd90)
         'gemini-3.1-flash-image',
       ];
@@ -665,7 +665,7 @@ async function _getClaudeUsage(accessToken, proxyOptions = null) {
         }
       }
 
-      // 0.5.165 — model-scoped weekly limits (Fable, and whatever Anthropic
+      // 0.5.166 — model-scoped weekly limits (Fable, and whatever Anthropic
       // scopes next) arrive in limits[], not as a seven_day_* key:
       //   { kind: "weekly_scoped", percent, resets_at,
       //     scope: { model: { display_name: "Fable" } } }

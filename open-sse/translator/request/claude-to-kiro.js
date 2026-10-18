@@ -34,7 +34,7 @@ import {
 import { DEFAULT_IMAGE_MIME } from "../schema/index.js";
 import { ROLE, CLAUDE_BLOCK } from "../schema/index.js";
 
-// 0.5.165 — Kiro rejects an empty user turn, so a turn that only carries tool
+// 0.5.166 — Kiro rejects an empty user turn, so a turn that only carries tool
 // results needs placeholder text. "continue" reads like a new instruction:
 // models answer the word itself and drop the task in progress (upstream 82b1bca4).
 const KIRO_TOOL_RESULTS_PLACEHOLDER = "Tool results provided.";
@@ -201,7 +201,7 @@ function convertClaudeMessagesToKiro(messages, tools, model) {
             if (typeof block.content === "string") {
               resultContent = block.content;
             } else if (Array.isArray(block.content)) {
-              // 0.5.165 — Kiro tool results are text-only, so images a tool
+              // 0.5.166 — Kiro tool results are text-only, so images a tool
               // returned (screenshots) ride on the user turn. They used to be
               // JSON-stringified into the result, flooding the context with
               // base64 (upstream f4f06f29).

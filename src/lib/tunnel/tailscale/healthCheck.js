@@ -18,7 +18,7 @@ export async function probeUrlAlive(url) {
   }
 }
 
-// 0.5.165 — callers may pass a shorter timeoutMs; the enable flow does, so the
+// 0.5.166 — callers may pass a shorter timeoutMs; the enable flow does, so the
 // toggle stops hanging for the full 180 s while DNS propagates (upstream e7c269b8).
 export async function waitForHealth(url, cancelToken = { cancelled: false }, { timeoutMs = HEALTH_CHECK.timeoutMs } = {}) {
   const start = Date.now();

@@ -9,7 +9,7 @@ const PROVIDER_RULES = {
   deepseek: { scope: "all" },
   minimax: { scope: "all" },
   "minimax-cn": { scope: "all" },
-  // 0.5.165 (upstream 5bdcd5e7) — OpenCode Free's Zen reasoning models reject a
+  // 0.5.166 (upstream 5bdcd5e7) — OpenCode Free's Zen reasoning models reject a
   // multi-turn history whose assistant messages carry no reasoning_content (400
   // missing_required_parameter). The response pipeline strips the field before it
   // reaches the client, so the echo can never come back from the client.

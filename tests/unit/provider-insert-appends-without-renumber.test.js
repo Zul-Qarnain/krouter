@@ -1,4 +1,4 @@
-// 0.5.165 — every insert loaded the whole provider pool and renumbered every
+// 0.5.166 — every insert loaded the whole provider pool and renumbered every
 // row's priority inside the transaction (O(pool) per key, O(n*m) for a bulk
 // import). A new row with no explicit priority now gets MAX(priority)+1 and the
 // pool is left alone; an explicit priority (the dashboard always sends one) still

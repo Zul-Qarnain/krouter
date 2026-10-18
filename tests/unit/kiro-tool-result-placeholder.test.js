@@ -1,5 +1,5 @@
 /**
- * 0.5.165 — a user turn that only carries tool results needs placeholder text
+ * 0.5.166 — a user turn that only carries tool results needs placeholder text
  * (Kiro rejects empty content), but "continue" reads like a new instruction:
  * models answer the word itself ("Nothing in progress to continue") and drop
  * the task they were in the middle of (upstream 82b1bca4).

@@ -1,4 +1,4 @@
-// 0.5.165 — a stream that aborts after HTTP 200 cannot change its status, so the
+// 0.5.166 — a stream that aborts after HTTP 200 cannot change its status, so the
 // failure has to travel in-band. Before this, only Responses passthrough got a
 // terminal frame; every other client saw "200 OK, a few chunks, then nothing" and
 // could not tell a truncated reply from a finished one (upstream 93001213).

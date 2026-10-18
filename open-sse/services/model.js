@@ -274,7 +274,7 @@ export async function getModelInfoCore(modelStr, aliasesOrGetter) {
   };
 }
 
-// 0.5.165 — slug ranges that only exist behind backend-api/codex. The Codex CLI's
+// 0.5.166 — slug ranges that only exist behind backend-api/codex. The Codex CLI's
 // /model picker sends a bare id, and every `gpt-*` slug used to fall through to
 // provider "openai" below, so a user with a ChatGPT connection and no OpenAI API
 // key got "no credentials for provider: openai" (upstream 8f9ff44f, efc80ba2).

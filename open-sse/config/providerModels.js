@@ -55,7 +55,7 @@ export const PROVIDER_MODELS = {
     ...CLAUDE_API_MODELS,
   ],
   cx: withCodexReviewModels([  // OpenAI Codex
-    // 0.5.165 — ChatGPT's live roster (upstream ca6e8407, dec820b9, 7878f53b,
+    // 0.5.166 — ChatGPT's live roster (upstream ca6e8407, dec820b9, 7878f53b,
     // ed963931, 832a3465, 92c7bdd5, 8f9ff44f, efc80ba2). gpt-5.5 — until now the
     // cx default — plus gpt-5.4, gpt-5.4-mini and gpt-5.3-codex-spark are gone
     // from backend-api/codex/models for ChatGPT sign-in and answer HTTP 400, so
@@ -83,7 +83,7 @@ export const PROVIDER_MODELS = {
     { id: "gpt-5.3-codex-low", name: "GPT 5.3 Codex (Low)" },
     { id: "gpt-5.3-codex-none", name: "GPT 5.3 Codex (None)" },
     // Image models (uses image_generation tool, requires Plus/Pro plan).
-    // 0.5.165 — the gpt-image-* ids run the Responses request on a chat model and
+    // 0.5.166 — the gpt-image-* ids run the Responses request on a chat model and
     // pass the image model as image_generation.model (upstream 7878f53b, eb712ca8,
     // 832a3465); the -image suffixed ids keep the per-chat-model behaviour.
     { id: "gpt-image-2.5", name: "GPT Image 2.5", type: "image", capabilities: ["text2img", "edit", "multiImage"], params: ["size", "quality", "background", "image_detail", "output_format"] },
@@ -125,7 +125,7 @@ export const PROVIDER_MODELS = {
     { id: "iflow-rome-30ba3b", name: "iFlow ROME" },
   ],
   ag: [  // Antigravity - special case: models call different backends
-    // 0.5.165 — Google's current Antigravity lineup (upstream 783e271c, 86694ed8,
+    // 0.5.166 — Google's current Antigravity lineup (upstream 783e271c, 86694ed8,
     // 70f15aa5, 24034f69, a07ed95b, 29fc880e). The Gemini 3.5 Flash tiers,
     // gemini-3-flash-agent and the gemini-3-flash command model were removed
     // upstream on 2026-10-08; the MITM synonym map keeps the old client ids working
@@ -237,7 +237,7 @@ export const PROVIDER_MODELS = {
     { id: "efficient", name: "Qoder Efficient" },
     { id: "lite", name: "Qoder Lite" },
     // Frontier models — pin a specific backing model.
-    // 0.5.165 (upstream 2ab6a4c9) — the server dropped gm51model and added the
+    // 0.5.166 (upstream 2ab6a4c9) — the server dropped gm51model and added the
     // Qwen 3.8 and GLM 5.3 pairs; the display names here had also drifted a
     // generation behind the models they actually reach.
     { id: "qmodel_38max", name: "Qwen 3.8 Max (Qoder)" },
@@ -290,7 +290,7 @@ export const PROVIDER_MODELS = {
     { id: "kimi-k3", name: "Kimi K3" },
     { id: "kimi-k2.7-code", name: "Kimi K2.7 Code" },
     { id: "kimi-k2.5", name: "Kimi K2.5" },
-    // 0.5.165 (upstream c8644368) — served on /messages, not /chat/completions, and
+    // 0.5.166 (upstream c8644368) — served on /messages, not /chat/completions, and
     // it rejects the thinking.type "enabled" shape the generic haiku pattern emits.
     { id: "claude-haiku-5-5", name: "Claude Haiku 5.5", targetFormat: "claude" },
     { id: "glm-5.3", name: "GLM 5.3" },
@@ -381,7 +381,7 @@ export const PROVIDER_MODELS = {
   // not the vendor's, so they all take OpenAI-style reasoning_effort rather
   // than their native thinking shape (see capabilities.js).
   cbcn: [  // CodeBuddy CN
-    // 0.5.165 — the gateway's own published roster as of the 2026-09-30 snapshot
+    // 0.5.166 — the gateway's own published roster as of the 2026-09-30 snapshot
     // (upstream e014cb53, cec672d9, 807553e2, 63de82b8). The published list is the
     // contract: models it no longer carries are removed even where the chat endpoint
     // still answers them, because the plugin's product-config payload is what
@@ -474,7 +474,7 @@ export const PROVIDER_MODELS = {
   gemini: [
     // Stable API alias supported by Gemini generateContent.
     { id: "gemini-flash-latest", name: "Gemini Flash (Latest)" },
-    // 0.5.165 — Gemini 4 Argon and the 3.7 / 3.8 Flash generations (upstream
+    // 0.5.166 — Gemini 4 Argon and the 3.7 / 3.8 Flash generations (upstream
     // 29fc880e, 86694ed8, 70f15aa5). Argon's thinking cannot be disabled and it
     // rejects thinkingBudget; see the *gemini-4* capability row.
     { id: "gemini-4-argon", name: "Gemini 4 Argon" },
@@ -530,7 +530,7 @@ export const PROVIDER_MODELS = {
   ],
   glm: [
     { id: "glm-5.3", name: "GLM 5.3" },
-    // 0.5.165 (upstream 9c650e1d) — 5.3 Flash is natively multimodal.
+    // 0.5.166 (upstream 9c650e1d) — 5.3 Flash is natively multimodal.
     { id: "glm-5.3-flash", name: "GLM 5.3 Flash (Vision)" },
     { id: "glm-5.2", name: "GLM 5.2" },
     { id: "glm-5.1", name: "GLM 5.1" },
@@ -540,7 +540,7 @@ export const PROVIDER_MODELS = {
   ],
   "glm-cn": [
     { id: "glm-5.3", name: "GLM 5.3" },
-    // 0.5.165 (upstream 9c650e1d) — the CN host serves the same roster as z.ai;
+    // 0.5.166 (upstream 9c650e1d) — the CN host serves the same roster as z.ai;
     // 5.3 Flash was new and 5.2 / 4.6V had never been backfilled here.
     { id: "glm-5.3-flash", name: "GLM 5.3 Flash (Vision)" },
     { id: "glm-5.2", name: "GLM 5.2" },
@@ -645,7 +645,7 @@ export const PROVIDER_MODELS = {
     { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
     { id: "deepseek-v4-pro-max", name: "DeepSeek V4 Pro Max", upstreamModelId: "deepseek-v4-pro" },
     { id: "deepseek-v4-pro-none", name: "DeepSeek V4 Pro No Thinking", upstreamModelId: "deepseek-v4-pro" },
-    // 0.5.165 (upstream 8e15f0bd) — V4.1 Flash replaced V4 Flash on 2026-09-10; the
+    // 0.5.166 (upstream 8e15f0bd) — V4.1 Flash replaced V4 Flash on 2026-09-10; the
     // old id still answers, so it stays listed below.
     { id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash" },
     { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
@@ -676,7 +676,7 @@ export const PROVIDER_MODELS = {
     { id: "distil-whisper-large-v3-en", name: "Distil Whisper Large v3 EN", type: "stt", params: ["language", "response_format", "temperature", "prompt"] },
   ],
   xai: [
-    // 0.5.165 — xAI's current flagships (upstream xai registry); both publish a
+    // 0.5.166 — xAI's current flagships (upstream xai registry); both publish a
     // 500K window, so the generic *grok* row under-reported them by 5x.
     { id: "grok-4.6", name: "Grok 4.6" },
     { id: "grok-4.5", name: "Grok 4.5" },
@@ -769,7 +769,7 @@ export const PROVIDER_MODELS = {
     { id: "inclusionAI/Ling-flash-2.0", name: "Ling Flash 2.0" },
   ],
   "xiaomi-mimo": [
-    // 0.5.165 (upstream 910db749) — the v2.6 generation. These three are the only
+    // 0.5.166 (upstream 910db749) — the v2.6 generation. These three are the only
     // MiMo ids the cloud API addresses with a "xiaomi/" vendor prefix; the v2.5 ids
     // below are served bare.
     { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro", upstreamModelId: "xiaomi/mimo-v2.6-pro" },
@@ -802,7 +802,7 @@ export const PROVIDER_MODELS = {
     { id: "NousResearch/Hermes-3-Llama-3.1-70B", name: "Hermes 3 70B" },
   ],
   ollama: [
-    // 0.5.165 (upstream 5c399b64) — verified on ollama.com/api/tags; vision + 1M.
+    // 0.5.166 (upstream 5c399b64) — verified on ollama.com/api/tags; vision + 1M.
     { id: "deepseek-v4.1-flash:cloud", name: "DeepSeek V4.1 Flash" },
     { id: "gpt-oss:120b", name: "GPT OSS 120B" },
     { id: "kimi-k2.5", name: "Kimi K2.5" },
@@ -812,7 +812,7 @@ export const PROVIDER_MODELS = {
     { id: "qwen3.5", name: "Qwen3.5" },
   ],
   vertex: [
-    // 0.5.165 (upstream 29fc880e) — Argon is served only from the global/us/eu
+    // 0.5.166 (upstream 29fc880e) — Argon is served only from the global/us/eu
     // multi-regions, never a regional location, so it carries its own location.
     { id: "gemini-4-argon", name: "Gemini 4 Argon", defaultLocation: "global" },
     { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview" },
@@ -870,7 +870,7 @@ export const PROVIDER_MODELS = {
     { id: "black-forest-labs/FLUX.1-schnell", name: "FLUX.1 Schnell", type: "image", params: [] },
     { id: "stabilityai/stable-diffusion-xl-base-1.0", name: "SDXL Base 1.0", type: "image", params: [] },
     // STT models
-    // 0.5.165 (upstream cf663f53) — the hf-inference ASR route ignores `language`
+    // 0.5.166 (upstream cf663f53) — the hf-inference ASR route ignores `language`
     // and whisper-small is no longer served; v3-turbo replaces it.
     { id: "openai/whisper-large-v3", name: "Whisper Large v3 (HF)", type: "stt", params: [] },
     { id: "openai/whisper-large-v3-turbo", name: "Whisper Large v3 Turbo (HF)", type: "stt", params: [] },
@@ -1155,7 +1155,7 @@ export function getModelUpstreamId(aliasOrId, modelId) {
   return modelId;
 }
 
-// 0.5.165 — the effort tier a catalog id pins, for providers whose tiers are
+// 0.5.166 — the effort tier a catalog id pins, for providers whose tiers are
 // separate model ids rather than a request parameter (Antigravity's
 // gemini-3.8-flash-high / claude-opus-5-5-low ladders). Upstream fuses it into
 // upstreamModelId as "<wire>(level)"; keeping it in its own field means the wire

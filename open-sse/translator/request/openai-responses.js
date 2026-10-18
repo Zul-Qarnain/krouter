@@ -10,10 +10,10 @@ import { normalizeResponsesInput } from "../helpers/responsesApiHelper.js";
 
 // Responses API enforces max 64 chars on call_id (#393)
 const MAX_CALL_ID_LEN = 64;
-// 0.5.165 — strict Responses upstreams also cap tool names at 128 (upstream e74db4d0)
+// 0.5.166 — strict Responses upstreams also cap tool names at 128 (upstream e74db4d0)
 const MAX_TOOL_NAME_LEN = 128;
 
-// 0.5.165 — a missing call_id used to stay undefined and 400 the request; fall back
+// 0.5.166 — a missing call_id used to stay undefined and 400 the request; fall back
 // to a unique id. The sequence keeps same-millisecond fallbacks distinct (upstream
 // e74db4d0 + 11222eff).
 let fallbackCallIdSeq = 0;
@@ -22,7 +22,7 @@ const clampCallId = (id) => {
   return id.length > MAX_CALL_ID_LEN ? id.substring(0, MAX_CALL_ID_LEN) : id;
 };
 
-// 0.5.165 — arguments must be exactly one JSON string: objects are stringified once,
+// 0.5.166 — arguments must be exactly one JSON string: objects are stringified once,
 // valid JSON strings pass through, anything else (partial fragment, empty) becomes
 // "{}" instead of tripping InputValidationError (upstream e74db4d0).
 function coerceCallArguments(value) {
@@ -33,7 +33,7 @@ function coerceCallArguments(value) {
   try { JSON.parse(value); return value; } catch { return "{}"; }
 }
 
-// 0.5.165 — function_call_output.output must be a string; null used to go out as
+// 0.5.166 — function_call_output.output must be a string; null used to go out as
 // "null". Fail-soft on circular / BigInt values (upstream e74db4d0 + 11222eff).
 function stringifySoft(value) {
   try { return JSON.stringify(value) ?? String(value); } catch { return String(value); }
@@ -45,10 +45,10 @@ function coerceCallOutput(value) {
   return stringifySoft(value);
 }
 
-// 0.5.165 — a nameless call or tool is rejected by strict Responses upstreams (#444).
+// 0.5.166 — a nameless call or tool is rejected by strict Responses upstreams (#444).
 const toolName = (name) => (typeof name === "string" ? name.trim().slice(0, MAX_TOOL_NAME_LEN) : "");
 
-// 0.5.165 — Responses takes the cap as max_output_tokens (upstream ab044e6d). 0 or a
+// 0.5.166 — Responses takes the cap as max_output_tokens (upstream ab044e6d). 0 or a
 // negative value means "unset" to some clients; never turn it into a cap.
 const outputCap = (body) => [body.max_output_tokens, body.max_completion_tokens, body.max_tokens]
   .find((v) => Number.isFinite(v) && v > 0);
@@ -254,7 +254,7 @@ function normalizeToolParameters(params) {
  */
 export function openaiToOpenAIResponsesRequest(model, body, stream, credentials) {
   // Body already in Responses API format (e.g. Cursor CLI calling /chat/completions with input[])
-  // 0.5.165 — still map the Chat-style cap: OpenAI-compatible Responses nodes go
+  // 0.5.166 — still map the Chat-style cap: OpenAI-compatible Responses nodes go
   // through DefaultExecutor, which never strips max_tokens (upstream ab044e6d).
   if (body.input) {
     const { max_tokens, max_completion_tokens, ...rest } = body;
@@ -328,7 +328,7 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
     }
 
     // Convert tool calls
-    // 0.5.165 — skip nameless calls (was "_unknown"), clamp names, one JSON string
+    // 0.5.166 — skip nameless calls (was "_unknown"), clamp names, one JSON string
     // of arguments (upstream e74db4d0).
     if (msg.role === "assistant" && msg.tool_calls) {
       for (const tc of msg.tool_calls) {
@@ -357,7 +357,7 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
   result.instructions = hasSystemMessage ? instructionParts.join("\n\n") : "";
 
   // Convert tools format
-  // 0.5.165 — drop nameless function tools and clamp names (upstream e74db4d0).
+  // 0.5.166 — drop nameless function tools and clamp names (upstream e74db4d0).
   if (body.tools && Array.isArray(body.tools)) {
     result.tools = body.tools.map(tool => {
       if (tool.type === "function") {
@@ -377,12 +377,12 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
 
   // Pass through other relevant fields
   if (body.temperature !== undefined) result.temperature = body.temperature;
-  // 0.5.165 — Responses wants max_output_tokens; max_tokens 400s on real OpenAI
+  // 0.5.166 — Responses wants max_output_tokens; max_tokens 400s on real OpenAI
   // /v1/responses and max_completion_tokens was dropped (upstream ab044e6d).
   const cap = outputCap(body);
   if (cap !== undefined) result.max_output_tokens = cap;
   if (body.top_p !== undefined) result.top_p = body.top_p;
-  // 0.5.165 — reasoning_effort was dropped, so a chat client's effort never reached
+  // 0.5.166 — reasoning_effort was dropped, so a chat client's effort never reached
   // Codex / Grok CLI / Copilot /responses (upstream ab044e6d). Only the Responses
   // fields are forwarded: other shapes (OpenRouter's {enabled, max_tokens}) would be
   // rejected by a strict upstream.

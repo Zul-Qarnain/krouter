@@ -1,4 +1,4 @@
-// 0.5.165 (kRouter-own, found by the 2026-10-16 blog fact-check) — NATIVE_PAIRS
+// 0.5.166 (kRouter-own, found by the 2026-10-16 blog fact-check) — NATIVE_PAIRS
 // listed "openai" and "commandcode" as native to the Codex CLI (v0.5.16, #1907).
 // Native passthrough skips translation, so a Codex request (a Responses API body:
 // input[], instructions) routed to the openai provider was posted as-is to

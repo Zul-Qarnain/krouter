@@ -1,5 +1,5 @@
 /**
- * 0.5.165 (upstream 8d1db46b + e7b5f09d + 30464bc2 + 625df74d) — one
+ * 0.5.166 (upstream 8d1db46b + e7b5f09d + 30464bc2 + 625df74d) — one
  * normalizeGeminiContents() shared by the gemini translator, the Claude ->
  * Antigravity envelope and the Antigravity executor.
  *

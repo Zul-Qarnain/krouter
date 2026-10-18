@@ -88,7 +88,7 @@ export function openaiToClaudeRequest(model, body, stream) {
 
     flushCurrentMessage();
 
-    // 0.5.165 (upstream 75834e96 + 5e9bd464) — a final user message with nothing
+    // 0.5.166 (upstream 75834e96 + 5e9bd464) — a final user message with nothing
     // Claude accepts (empty string, unsupported parts) is not flushed, so the body
     // ends on assistant: prefill, which newer models reject. Judge by the role the
     // client really ended on, so its own assistant prefill is kept.
@@ -184,7 +184,7 @@ Respond ONLY with the JSON object, no other text.`);
       type: body.thinking.type || "enabled",
       ...(body.thinking.budget_tokens && { budget_tokens: body.thinking.budget_tokens }),
       ...(body.thinking.max_tokens && { max_tokens: body.thinking.max_tokens }),
-      // 0.5.165 — keep a display the client chose (upstream 90b06934)
+      // 0.5.166 — keep a display the client chose (upstream 90b06934)
       ...(typeof body.thinking.display === "string" && { display: body.thinking.display })
     };
   }
@@ -218,7 +218,7 @@ Respond ONLY with the JSON object, no other text.`);
   return result;
 }
 
-// 0.5.165 — OpenAI reasoning_effort as Claude's effort level. Claude has no
+// 0.5.166 — OpenAI reasoning_effort as Claude's effort level. Claude has no
 // "none" for a model that always thinks, and no "minimal": both become "low".
 const CLAUDE_EFFORT_FROM_OPENAI = {
   none: "low", minimal: "low", low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max",
@@ -249,11 +249,11 @@ function wantsReasoningText(body) {
 }
 
 // Shape the thinking fields for the Claude model being called.
-// 0.5.165 (upstream ac9120fd) — models that think on every turn (Opus 5.5, Sonnet
+// 0.5.166 (upstream ac9120fd) — models that think on every turn (Opus 5.5, Sonnet
 // 5.5, Fable) take output_config.effort; the budget switch is the old shape (Fable
 // answers it with 400). "disabled" is left for prepareClaudeRequest, which rewrites
 // it per model.
-// 0.5.165 (upstream 90b06934) — elsewhere, Claude returns thinking text only with
+// 0.5.166 (upstream 90b06934) — elsewhere, Claude returns thinking text only with
 // thinking.display "summarized", which OpenAI has no field for. Ask for it when the
 // client asked for reasoning; selectAnthropicBeta then drops redact-thinking.
 function applyClaudeThinkingShape(model, body, result) {

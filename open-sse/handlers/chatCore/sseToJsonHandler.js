@@ -34,7 +34,7 @@ function pickAssistantMessageForChatCompletion(output) {
 }
 
 /**
- * HTTP status for an error chunk found in an upstream SSE stream. 0.5.165 — a
+ * HTTP status for an error chunk found in an upstream SSE stream. 0.5.166 — a
  * structured chunk may carry the upstream's real status (Qoder sends 403 for its
  * billing envelope); keep it so the account loop locks and falls back on the right
  * status instead of a blanket 502. Anything outside 400-599 gets `fallback`
@@ -247,7 +247,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
         };
       }
 
-      // 0.5.165 — a Claude client gets a Claude message here too, as the chat branch
+      // 0.5.166 — a Claude client gets a Claude message here too, as the chat branch
       // below has since 0.5.163; this branch handed it a chat.completion (upstream 1d4335d4).
       if (sourceFormat === FORMATS.CLAUDE) finalResp = openAICompletionToClaudeMessage(finalResp);
 

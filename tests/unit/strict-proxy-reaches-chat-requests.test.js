@@ -1,5 +1,5 @@
 /**
- * 0.5.165 — strict proxy on a CHAT request (upstream cfd8c618, review follow-up).
+ * 0.5.166 — strict proxy on a CHAT request (upstream cfd8c618, review follow-up).
  *
  * chatCore reads credentials.providerSpecificData.strictProxy and proxyPoolId to build
  * proxyOptions, but getProviderCredentials never wrote strictProxy, so the guard in

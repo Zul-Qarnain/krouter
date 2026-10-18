@@ -29,7 +29,7 @@ const OAUTH_TEST_CONFIG = {
     method: "POST",
     authHeader: "Authorization",
     authPrefix: "Bearer ",
-    // 0.5.165 — one shared CLI version instead of a private 0.136.0 copy, and the
+    // 0.5.166 — one shared CLI version instead of a private 0.136.0 copy, and the
     // probe model comes from the catalog so it cannot outlive a retirement
     // (upstream a7047a07, ca6e8407).
     extraHeaders: { "Content-Type": "application/json", "originator": "codex_cli_rs", "User-Agent": `codex_cli_rs/${CODEX_CLI_VERSION}` },

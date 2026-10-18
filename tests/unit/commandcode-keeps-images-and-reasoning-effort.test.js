@@ -1,11 +1,11 @@
-// 0.5.165 (upstream 13b468b8) — Command Code's /alpha/generate takes a native
+// 0.5.166 (upstream 13b468b8) — Command Code's /alpha/generate takes a native
 // {type:"image"} block, but kRouter replaced every image with the literal text
 // "[image omitted]", so vision through Command Code always answered about an
 // image it never saw. The client's reasoning_effort was dropped outright: the
 // envelope has no top-level slot for it and the native CLI sends it inside
 // `params`.
 //
-// 0.5.165 (upstream 092c84ea) — a history turn that carries tool calls needs a
+// 0.5.166 (upstream 092c84ea) — a history turn that carries tool calls needs a
 // reasoning block ahead of them, which is what the CLI sends.
 import { describe, it, expect } from "vitest";
 import { openaiToCommandCode } from "../../open-sse/translator/request/openai-to-commandcode.js";

@@ -1,4 +1,4 @@
-// 0.5.165 — the thinking shape an OpenAI-format client gets on Claude.
+// 0.5.166 — the thinking shape an OpenAI-format client gets on Claude.
 //
 // ac9120fd: Opus 5.5, Sonnet 5.5 and Fable think on every turn and take
 // output_config.effort; a budget switch ({type:"enabled", budget_tokens}) is the

@@ -1,4 +1,4 @@
-// 0.5.165 — combos store "provider/model" strings. /api/models returns records
+// 0.5.166 — combos store "provider/model" strings. /api/models returns records
 // ({ provider, model, fullModel, alias }), so convert before saving; null means
 // the record has no usable identifier (upstream b677bfce).
 function comboModelId(model) {

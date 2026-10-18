@@ -19,7 +19,7 @@ const DEFAULT_SETTINGS = {
   comboStrategies: {},
   // 0.5.125 (upstream 8e59093d, adapted) — capacity-adapter fallback pools per
   // input modality. Only `vision` is enabled by default; audio/pdf/video are opt-in.
-  // 0.5.165 — the vision pool no longer implies mmf/mimo-auto (Xiaomi ended the
+  // 0.5.166 — the vision pool no longer implies mmf/mimo-auto (Xiaomi ended the
   // free MiMo channel, upstream 6d96e24b): it does nothing until a model is picked.
   capacityAdapter: {
     vision: { enabled: true, roundRobin: false, models: [] },
@@ -115,7 +115,7 @@ function mergeWithDefaults(raw) {
   return merged;
 }
 
-// 0.5.165 — drop stored mmf/* pool entries (dead free MiMo channel, upstream
+// 0.5.166 — drop stored mmf/* pool entries (dead free MiMo channel, upstream
 // 6d96e24b). Copy-on-write: returns the same object when nothing changes.
 function migrateCapacityAdapter(adapter) {
   if (!adapter || typeof adapter !== "object" || Array.isArray(adapter)) return adapter;

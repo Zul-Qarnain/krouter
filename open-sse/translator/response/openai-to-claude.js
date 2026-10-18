@@ -261,7 +261,7 @@ export function convertFinishReason(reason) {
     case "stop": return "end_turn";
     case "length": return "max_tokens";
     case "tool_calls": return "tool_use";
-    // 0.5.165 — a filtered turn is a refusal to a Claude client, not a clean end_turn
+    // 0.5.166 — a filtered turn is a refusal to a Claude client, not a clean end_turn
     // (upstream 0f488c70).
     case "content_filter": return "refusal";
     default: return "end_turn";

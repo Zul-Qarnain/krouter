@@ -1,4 +1,4 @@
-// 0.5.165 (upstream e74db4d0 + 11222eff) — strict Responses upstreams (OpenAI
+// 0.5.166 (upstream e74db4d0 + 11222eff) — strict Responses upstreams (OpenAI
 // /v1/responses, Codex, Muse Spark) reject the whole request with
 // InputValidationError on: a nameless function_call or function tool, arguments
 // that are not one JSON string, a function_call_output whose output is not a

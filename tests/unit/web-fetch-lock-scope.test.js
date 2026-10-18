@@ -1,4 +1,4 @@
-// 0.5.165 — a failed web fetch locked the whole account. Tavily and Exa serve
+// 0.5.166 — a failed web fetch locked the whole account. Tavily and Exa serve
 // search and fetch from one connection, so one failed /v1/web/fetch took that
 // connection out of /v1/search (and any provider that also serves chat out of
 // chat). Fetch now locks, reads and clears under `webfetch:<provider>`, the same

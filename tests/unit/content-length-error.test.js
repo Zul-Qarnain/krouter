@@ -44,9 +44,9 @@ describe("input-size errors (do not fan out)", () => {
     expect(r.shouldFallback).toBe(false);
   });
 
-  it("unrelated 400 is request-scoped: no account lock, no failover (0.5.165)", () => {
+  it("unrelated 400 is request-scoped: no account lock, no failover (0.5.166)", () => {
     const r = checkFallbackError(400, '{"error":"something else"}');
-    // Matches no text rule. 0.5.165 (upstream 20a43f5a): an unmatched 4xx is about
+    // Matches no text rule. 0.5.166 (upstream 20a43f5a): an unmatched 4xx is about
     // the request, so it no longer takes the 30s transient default. A combo still
     // advances to its next member on requestScoped.
     expect(r.shouldFallback).toBe(false);

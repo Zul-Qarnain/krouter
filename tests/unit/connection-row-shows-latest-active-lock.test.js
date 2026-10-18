@@ -1,4 +1,4 @@
-// 0.5.165 (kRouter-own) — the connection card's cooldown timer took the
+// 0.5.166 (kRouter-own) — the connection card's cooldown timer took the
 // EARLIEST modelLock_* value, expired ones included. Expired keys are only
 // cleared by a success, which a held account never gets, so a month-long
 // account-wide hold next to an old 2s model lock showed "unavailable" with no

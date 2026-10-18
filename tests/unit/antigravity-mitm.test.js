@@ -10,7 +10,7 @@ const { MODEL_NO_MAP } = require("../../src/mitm/config.js");
 // streamGenerateContent requests (see AI_JOURNAL): tab-autocomplete sends
 // `tab_jump_flash_lite_preview` / `tab_flash_lite_preview`.
 //
-// 0.5.165 — the agent loop's out-of-box model moved from the retired
+// 0.5.166 — the agent loop's out-of-box model moved from the retired
 // `gemini-3.5-flash-low` to `gemini-3.8-flash-medium` (upstream 24034f69). The old
 // id is kept as a synonym so IDE builds in the field still resolve.
 describe("Antigravity MITM model handling", () => {

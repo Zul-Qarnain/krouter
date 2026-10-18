@@ -1,4 +1,4 @@
-// 0.5.165 — catalog refresh for the providers that shipped new models between
+// 0.5.166 — catalog refresh for the providers that shipped new models between
 // 2026-08 and 2026-10 upstream, plus the provider-constant endpoints that moved.
 //
 // Each block below is a model (or endpoint) a kRouter user cannot reach today

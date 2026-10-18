@@ -11,7 +11,7 @@
 // Each rule:
 //   provider?  string  — restrict to this provider id; omit to apply globally
 //   match?     RegExp | (model) => boolean  — predicate on the model id; omit to
-//              match every model (0.5.165 — provider-only rules used to throw)
+//              match every model (0.5.166 — provider-only rules used to throw)
 //   drop?      string[]  — request-body keys to remove when both checks pass
 //   dropMessageFields?  string[]  — keys to remove from assistant messages
 const REPLAYED_REASONING_FIELDS = ["reasoning_content", "reasoning", "reasoning_details"];
@@ -45,7 +45,7 @@ const STRIP_RULES = [
     drop: ["thinking", "reasoning_effort"],
   },
 
-  // 0.5.165 (upstream 7c2b1fe3) — strict OpenAI-compatible validators reject
+  // 0.5.166 (upstream 7c2b1fe3) — strict OpenAI-compatible validators reject
   // unknown assistant-message fields. Clients driving reasoning models (Hermes
   // Agent, the DeepSeek/Kimi convention) echo the prior turn's reasoning on every
   // assistant message: Groq 400, Mistral 422 ("extra_forbidden"), Cerebras 400,
@@ -61,7 +61,7 @@ function matches(rule, model) {
   return typeof rule.match === "function" ? rule.match(model) : rule.match.test(model);
 }
 
-// 0.5.165 — copy-on-write: the message objects may be the client's own, so build
+// 0.5.166 — copy-on-write: the message objects may be the client's own, so build
 // new ones rather than deleting in place (upstream 7c2b1fe3 deleted in place).
 function dropAssistantFields(messages, fields) {
   let changed = false;

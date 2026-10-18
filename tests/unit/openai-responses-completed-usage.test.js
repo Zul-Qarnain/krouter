@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 7111db35) — wait for real usage before response.completed.
+// 0.5.166 (upstream 7111db35) — wait for real usage before response.completed.
 import { describe, expect, it } from "vitest";
 
 import "../translator/registerAll.js";

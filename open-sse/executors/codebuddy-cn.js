@@ -5,11 +5,11 @@ import { DefaultExecutor } from "./default.js";
 // param entirely and let CodeBuddy fall back to its own default.
 const REASONING_OFF_VALUES = new Set(["none", "off"]);
 
-// 0.5.165 — the effort ladder, cheapest first. Used only to step a requested
+// 0.5.166 — the effort ladder, cheapest first. Used only to step a requested
 // level onto the nearest one a model actually publishes.
 const EFFORT_LADDER = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
-// 0.5.165 (upstream e014cb53 + the upstream/master end state) — the per-model
+// 0.5.166 (upstream e014cb53 + the upstream/master end state) — the per-model
 // effort sets CodeBuddy's own product-config payload publishes as
 // `reasoning.supportedEfforts`, snapshot 2026-09-30. The chat endpoint answers
 // 200 for any level and then silently clamps whatever is outside the set, so the
@@ -50,7 +50,7 @@ export function clampCodeBuddyEffort(model, effort) {
   return (atOrBelow.length ? atOrBelow[atOrBelow.length - 1] : ranked[0]).level;
 }
 
-// 0.5.165 (upstream e706e4f2) — the rate-limit envelope. CodeBuddy reports a
+// 0.5.166 (upstream e706e4f2) — the rate-limit envelope. CodeBuddy reports a
 // per-model frequency limit as its own code 6004 with the retry time in the
 // message, on whatever HTTP status it feels like (seen on 200 and 400), so the
 // text is the only reliable marker. Chinese first because that is what the CN

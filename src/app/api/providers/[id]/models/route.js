@@ -210,7 +210,7 @@ const PROVIDER_MODELS_CONFIG = {
     // minimal_client_version; a stale client_version (was 1.0.0) silently filters out
     // the newest models, so send a current value and the codex_cli_rs originator
     // like the real client.
-    // 0.5.165 — and take it from the one constant the chat transport uses, because
+    // 0.5.166 — and take it from the one constant the chat transport uses, because
     // this copy had drifted to 0.144.6 and was hiding the whole GPT-6 family from
     // the model picker (upstream a7047a07, ca6e8407).
     url: `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`,

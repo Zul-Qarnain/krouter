@@ -212,7 +212,7 @@ export async function POST(request) {
       authType: isWebCookieProvider ? "cookie" : "apikey",
       name: connectionName,
       apiKey: apiKey || "",
-      // 0.5.165 — no priority = append at MAX+1 without renumbering the pool (a
+      // 0.5.166 — no priority = append at MAX+1 without renumbering the pool (a
       // scripted bulk add stays O(1) per key and in order); the dashboard sends one.
       // Omitted, not undefined: an allowed overwrite must keep the row's priority.
       ...(priority ? { priority } : {}),
@@ -221,7 +221,7 @@ export async function POST(request) {
       providerSpecificData: mergedProviderSpecificData,
       isActive: true,
       testStatus: testStatus || "unknown",
-      // 0.5.165 — a name the provider already has is refused (409) unless the request
+      // 0.5.166 — a name the provider already has is refused (409) unless the request
       // says to replace that key: allowOverwrite / overwrite, or that row's id.
       allowOverwrite: body.allowOverwrite === true || body.overwrite === true,
       ...(typeof body.id === "string" && body.id ? { id: body.id } : {}),
@@ -233,7 +233,7 @@ export async function POST(request) {
 
     return NextResponse.json({ connection: result }, { status: 201 });
   } catch (error) {
-    // 0.5.165 — upstream 239bcfc5: the dashboard shows `error` as-is.
+    // 0.5.166 — upstream 239bcfc5: the dashboard shows `error` as-is.
     if (error?.code === "PROVIDER_NAME_CONFLICT") {
       return NextResponse.json(
         {

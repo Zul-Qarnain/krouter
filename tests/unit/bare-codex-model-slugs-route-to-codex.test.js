@@ -1,4 +1,4 @@
-// 0.5.165 — the Codex CLI's /model picker sends a bare model id with no provider
+// 0.5.166 — the Codex CLI's /model picker sends a bare model id with no provider
 // prefix. Every `gpt-*` slug fell through to provider "openai" (model.js:284), so
 // a user with a ChatGPT OAuth connection and no OpenAI API key got "no credentials
 // for provider: openai" for gpt-6.1-sol, gpt-5.6-terra, gpt-daybreak-blue-latest,

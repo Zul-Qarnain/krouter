@@ -18,7 +18,7 @@ import { saveRequestUsage } from "@/lib/usageDb.js";
 // Providers that don't require credentials (noAuth)
 const NO_AUTH_PROVIDERS = new Set(["sdwebui", "comfyui"]);
 
-// 0.5.165 (upstream e10da160) — image requests used to cost nothing on the usage
+// 0.5.166 (upstream e10da160) — image requests used to cost nothing on the usage
 // page. Only a provider-reported count is written: never an estimate, and never a
 // row that could make the image spend look smaller or larger than it was. The
 // write is fire-and-forget so a locked database cannot fail the image response.

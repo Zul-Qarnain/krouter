@@ -4,7 +4,7 @@ import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getMeta, setMeta } from "../helpers/metaStore.js";
 
-// 0.5.165 — keep the last 4 too: every kRouter key shares the sk-{machineId}
+// 0.5.166 — keep the last 4 too: every kRouter key shares the sk-{machineId}
 // prefix, so first-8-only masks were identical for all keys (upstream 4a57df8b).
 // Trimmed so a key sent with stray whitespace masks the same (upstream 813a0121).
 function maskApiKey(key) {
@@ -14,7 +14,7 @@ function maskApiKey(key) {
   return trimmed.slice(0, 8) + "***" + trimmed.slice(-4);
 }
 
-// 0.5.165 — byApiKey buckets must be per FULL key (upstream a406381f), but the
+// 0.5.166 — byApiKey buckets must be per FULL key (upstream a406381f), but the
 // bucket id is the map key of /api/usage/stats, which must not carry the raw key
 // (AUDIT-002). A one-way ref of the full key gives both. Shared by the live path,
 // the daily path and the lastUsed overlay so all three land in the same bucket.
@@ -360,7 +360,7 @@ export async function getUsageStats(period = "all") {
   let allApiKeys = [];
   try { allApiKeys = await getApiKeys(); } catch {}
   const apiKeyMap = {};
-  // 0.5.165 — trimmed so a key that arrived with whitespace still finds its name (upstream 813a0121).
+  // 0.5.166 — trimmed so a key that arrived with whitespace still finds its name (upstream 813a0121).
   for (const k of allApiKeys) {
     if (k.key) apiKeyMap[k.key.trim()] = { name: k.name, id: k.id, createdAt: k.createdAt };
   }
@@ -503,7 +503,7 @@ export async function getUsageStats(period = "all") {
         const apiKeyVal = rawApiKey ? rawApiKey.trim() : null;
         const keyInfo = apiKeyVal ? apiKeyMap[apiKeyVal] : null;
         const apiKeyMasked = maskApiKey(apiKeyVal);
-        // 0.5.165 — an unnamed key falls back to its mask; the 8-char prefix is shared by every key (upstream 813a0121).
+        // 0.5.166 — an unnamed key falls back to its mask; the 8-char prefix is shared by every key (upstream 813a0121).
         const keyName = keyInfo?.name || (apiKeyVal ? (apiKeyMasked || apiKeyVal.slice(0, 8) + "...") : "Local (No API Key)");
         const apiKeyKey = apiKeyMasked || "local-no-key";
         if (!stats.byApiKey[akKey]) {
@@ -533,7 +533,7 @@ export async function getUsageStats(period = "all") {
     }
 
     // Overlay precise lastUsed timestamps from history.
-    // 0.5.165 — scan only the last 2 days: period=all read the whole usageHistory
+    // 0.5.166 — scan only the last 2 days: period=all read the whole usageHistory
     // table (~2 s on 290K rows) on every stats update for every SSE listener.
     // Older entries keep the day-level lastUsed from usageDaily (upstream d1de3245).
     const overlayCutoff = Math.max(
@@ -555,7 +555,7 @@ export async function getUsageStats(period = "all") {
         if (stats.byAccount[accountKey] && new Date(ts) > new Date(stats.byAccount[accountKey].lastUsed)) stats.byAccount[accountKey].lastUsed = ts;
       }
 
-      // 0.5.165 — same bucket ids as the daily loop above; the no-key form now
+      // 0.5.166 — same bucket ids as the daily loop above; the no-key form now
       // matches the daily "local-no-key|model|provider" key, which "local-no-key" never did.
       const apiKeyKey = (e.apiKey && typeof e.apiKey === "string")
         ? apiKeyBucketId(e.apiKey, e.model, e.provider)
@@ -583,7 +583,7 @@ export async function getUsageStats(period = "all") {
 
     for (const r of filtered) {
       const tokens = parseJson(r.tokens, {}) || {};
-      // 0.5.165 — input_tokens rows (embeddings, Gemini) counted as 0 here while the
+      // 0.5.166 — input_tokens rows (embeddings, Gemini) counted as 0 here while the
       // daily rollup counted them; fall back like the other read paths (upstream 813a0121).
       const promptTokens = tokens.prompt_tokens || tokens.input_tokens || r.promptTokens || 0;
       const completionTokens = tokens.completion_tokens || tokens.output_tokens || r.completionTokens || 0;
@@ -628,7 +628,7 @@ export async function getUsageStats(period = "all") {
         const keyInfo = apiKeyMap[apiKeyVal];
         const apiKeyMasked = maskApiKey(apiKeyVal);
         const keyName = keyInfo?.name || apiKeyMasked || r.apiKey.slice(0, 8) + "...";
-        // 0.5.165 — bucket by the FULL key (via its one-way ref), like the daily
+        // 0.5.166 — bucket by the FULL key (via its one-way ref), like the daily
         // rollup: the mask collapsed every same-prefix key into one bucket and
         // credited one holder's usage to another (upstream a406381f + 4a57df8b).
         const akKey = apiKeyBucketId(r.apiKey, r.model, r.provider);

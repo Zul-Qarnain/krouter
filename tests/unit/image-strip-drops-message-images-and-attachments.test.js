@@ -1,4 +1,4 @@
-// 0.5.165 (upstream 345cdcf6, strip half) — Ollama/Hermes clients put images in
+// 0.5.166 (upstream 345cdcf6, strip half) — Ollama/Hermes clients put images in
 // msg.images[] and the Vercel AI SDK puts them in msg.experimental_attachments /
 // msg.attachments, beside a plain string content. 0.5.142 taught combo.js to
 // detect those shapes, but stripImagesFromBody only filtered content blocks, so a

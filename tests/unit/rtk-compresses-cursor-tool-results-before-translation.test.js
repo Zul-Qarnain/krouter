@@ -1,4 +1,4 @@
-// 0.5.165 — RTK compresses tool results on the translated body. openai-to-cursor
+// 0.5.166 — RTK compresses tool results on the translated body. openai-to-cursor
 // rewrites role:"tool" messages into user text (<tool_result> XML), so for Cursor
 // the post-translate pass found nothing to compress and every tool output went
 // out in full. Cursor now runs RTK on a copy of the source body before

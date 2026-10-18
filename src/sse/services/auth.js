@@ -218,7 +218,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
           connectionNoProxy: resolvedProxy.connectionNoProxy,
           connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
           vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
-          // 0.5.165 — chatCore reads this to enforce a strict pool on chat requests (upstream cfd8c618).
+          // 0.5.166 — chatCore reads this to enforce a strict pool on chat requests (upstream cfd8c618).
           strictProxy: resolvedProxy.strictProxy === true,
         },
       };
@@ -251,7 +251,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     // Quota preflight (0.5.27): also skip connections whose remaining quota for
     // this model is at or below the threshold. Pure cache-lookup, no I/O.
     const quotaSkipped = [];
-    // 0.5.165 — a Codex connection whose enabledModels leave the model out cannot
+    // 0.5.166 — a Codex connection whose enabledModels leave the model out cannot
     // serve it (its ChatGPT plan rejects the model with a 400), so skip it
     // (upstream 9f41ee75). requestedModel lets a caller pass a marked id.
     const requestedModel = options?.requestedModel || model;
@@ -395,7 +395,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         connectionNoProxy: resolvedProxy.connectionNoProxy,
         connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
         vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
-          // 0.5.165 — chatCore reads this to enforce a strict pool on chat requests (upstream cfd8c618).
+          // 0.5.166 — chatCore reads this to enforce a strict pool on chat requests (upstream cfd8c618).
           strictProxy: resolvedProxy.strictProxy === true,
       },
       connectionId: connection.id,
@@ -476,13 +476,13 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
       // not the old 30-min rate-limit cap. A daily/weekly-exhausted account
       // (e.g. Antigravity "Resets in 104h") must stay out of rotation so the
       // picker uses fresh accounts instead of re-selecting the dead one every
-      // 30 min. 0.5.165 — the TPM (per-minute) downgrade below no longer
+      // 30 min. 0.5.166 — the TPM (per-minute) downgrade below no longer
       // overrides a precise reset; a real minute window carries a short one.
       cooldownMs = Math.min(resetsAtMs - Date.now(), MAX_QUOTA_RESET_COOLDOWN_MS);
       newBackoffLevel = 0;
       permanent = false;
     } else {
-      // 0.5.165 — pass the provider so provider-scoped rules (Codex plan rejection) apply (upstream 9f41ee75).
+      // 0.5.166 — pass the provider so provider-scoped rules (Codex plan rejection) apply (upstream 9f41ee75).
       ({ shouldFallback, cooldownMs, newBackoffLevel, accountLock, permanent } = checkFallbackError(status, errorText, backoffLevel, provider));
     }
 
@@ -511,7 +511,7 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
     const hasHoursOrDaysReset = /resets?\s+in\s+\d+h/i.test(errorText || "")
       || /resets?\s+in\s+\d+\s*(?:hour|day)/i.test(errorText || "");
 
-    // 0.5.165 — never cut a precise upstream reset (Codex resets_at, Retry-After,
+    // 0.5.166 — never cut a precise upstream reset (Codex resets_at, Retry-After,
     // Google retryDelay) to the 90s TPM lock. The quota cache fails open when cold,
     // so a "rate limit" 429 with a reset hours out was re-tried every 90s.
     const hasPreciseReset = !!(resetsAtMs && resetsAtMs > Date.now());

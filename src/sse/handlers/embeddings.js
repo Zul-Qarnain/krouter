@@ -104,7 +104,7 @@ export async function handleEmbeddings(request) {
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const errorMsg = lastError || credentials.lastError || "Unavailable";
-        // 0.5.165 — every account is parked: 503 + Retry-After, never a stale 401/400 (upstream 15687d19).
+        // 0.5.166 — every account is parked: 503 + Retry-After, never a stale 401/400 (upstream 15687d19).
         const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("EMBEDDINGS", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);

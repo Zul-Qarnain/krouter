@@ -1,4 +1,4 @@
-// 0.5.165 (upstream da004655, 7111db35) — usage on response.completed so Responses
+// 0.5.166 (upstream da004655, 7111db35) — usage on response.completed so Responses
 // clients (Codex CLI) can track context and auto-compact.
 import { describe, expect, it } from "vitest";
 

@@ -29,7 +29,7 @@ function flattenText(content) {
   return String(content);
 }
 
-// 0.5.165 (upstream 13b468b8) — `/alpha/generate` takes a native image block.
+// 0.5.166 (upstream 13b468b8) — `/alpha/generate` takes a native image block.
 // Every image used to become the literal text "[image omitted]", so a vision
 // request through Command Code answered about an image it had never seen.
 const DATA_URI = /^data:([^;,]+);base64,(.+)$/s;
@@ -143,7 +143,7 @@ function convertMessages(messages = []) {
 
     if (role === "assistant") {
       const blocks = [];
-      // 0.5.165 (upstream 092c84ea) — the native CLI opens a thinking turn with a
+      // 0.5.166 (upstream 092c84ea) — the native CLI opens a thinking turn with a
       // reasoning block and puts the tool calls after it. Replay the client's own
       // reasoning when it echoed any, and a placeholder on a tool-call turn so the
       // replayed history keeps the shape the gateway was built around.
@@ -212,7 +212,7 @@ export function openaiToCommandCode(model, body, stream /* , credentials */) {
   if (tools) params.tools = tools;
   if (body.top_p != null) params.top_p = body.top_p;
 
-  // 0.5.165 (upstream 13b468b8) — the native CLI sends the level inside params.
+  // 0.5.166 (upstream 13b468b8) — the native CLI sends the level inside params.
   // On the envelope wrapper the gateway ignores it, which is where the client's
   // effort used to go to die. Unmapped: Command Code accepts the whole ladder.
   const effort = body.reasoning_effort;

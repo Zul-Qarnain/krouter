@@ -77,7 +77,7 @@ export async function resolveConnectionProxyConfig(
 
     const legacy = normalizeLegacyProxy(providerSpecificData);
 
-    // 0.5.165 — a strict pool keeps its guarantee even when the pool itself is
+    // 0.5.166 — a strict pool keeps its guarantee even when the pool itself is
     // not usable (inactive, or saved without a url). The legacy/none returns
     // below used to drop strictProxy, so the request left over the direct IP
     // (upstream 24664f2c).
@@ -159,7 +159,7 @@ export async function resolveConnectionProxyConfig(
         strictProxy: poolStrictProxy,
 
         ...legacy,
-        // 0.5.165 — the legacy noProxy is ignored while the pool works. Under an
+        // 0.5.166 — the legacy noProxy is ignored while the pool works. Under an
         // unusable strict pool, honouring it would send those hosts direct
         // exactly when the pool is down, so drop it (kRouter-own).
         connectionNoProxy: poolStrictProxy ? "" : legacy.connectionNoProxy,
@@ -188,7 +188,7 @@ export async function resolveConnectionProxyConfig(
       error
     );
 
-    // 0.5.165 — fail closed. The lookup failed, so whether the pool is strict is
+    // 0.5.166 — fail closed. The lookup failed, so whether the pool is strict is
     // unknown; with a pool assigned, report strict so proxyAwareFetch refuses
     // instead of sending the request over the direct IP (kRouter-own).
     const proxyPoolId = normalizeProxyPoolId(providerSpecificData);

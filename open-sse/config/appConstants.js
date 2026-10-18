@@ -166,13 +166,13 @@ export const CLAUDE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official C
 // callback keeps the replacement reading naturally wherever it lands.
 export const ANTIGRAVITY_PROMPT_REWRITES = [
   { from: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", to: "" },
-  // 0.5.165 — Claude Code prepends this line to its system prompt. The
+  // 0.5.166 — Claude Code prepends this line to its system prompt. The
   // Claude-format translator strips it, but OpenAI-format clients (proxies that
   // convert Claude Code to /v1/chat/completions) pass it through, and any system
   // text carrying it gets a fake 429 RESOURCE_EXHAUSTED (upstream b3d6e089).
   // Anchored per line so a mid-sentence mention is left alone.
   { from: /^x-anthropic-billing-header:[^\n]*(?:\r?\n)*/gim, to: "" },
-  // 0.5.165 — every Hermes identity variant, not just the one legacy sentence.
+  // 0.5.166 — every Hermes identity variant, not just the one legacy sentence.
   // Current builds say "You are Hermes Agent, built by Nous Research." and
   // similar, which slipped through and drew the same fake 429 (upstream a61fc6a0,
   // superseding f6422953).
@@ -184,7 +184,7 @@ export const ANTIGRAVITY_DEFAULT_SYSTEM = "You are Antigravity, a powerful agent
 
 // Proactive token refresh lead times per provider (ms)
 export const REFRESH_LEAD_MS = {
-  // 0.5.165 — was 5 days (inherited, not a kRouter choice). OpenAI rotates the
+  // 0.5.166 — was 5 days (inherited, not a kRouter choice). OpenAI rotates the
   // Codex refresh token on every refresh and revokes the session on reuse.
   // Upstream sees ~1h access tokens, so a 5-day lead refreshed on every call
   // and the background writers kept presenting rotated tokens (upstream

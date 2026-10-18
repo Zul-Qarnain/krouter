@@ -1,4 +1,4 @@
-// 0.5.165 — CodeBuddy CN forced reasoning_effort:"medium" + reasoning_summary:"auto"
+// 0.5.166 — CodeBuddy CN forced reasoning_effort:"medium" + reasoning_summary:"auto"
 // onto every request the client sent no reasoning on. Upstream removed that in
 // d1e98d9a (#2071): the pair trips CodeBuddy's content filter and the answer comes
 // back as an error. "medium" is also outside most per-model effort sets.

@@ -124,7 +124,7 @@ async function transcribeGemini(cfg, file, model, token, formData) {
 
 // HuggingFace: POST raw binary to {baseUrl}/{model_id}
 async function transcribeHuggingFace(cfg, file, model, token) {
-  // 0.5.165 — the model id arrives unvalidated from the client (parseModel splits
+  // 0.5.166 — the model id arrives unvalidated from the client (parseModel splits
   // on the first slash and passes the rest through), so `?`/`#` would rewrite the
   // path into a query or truncate it. Same guard as the image adapter. (upstream cf663f53)
   if (model.includes("..") || model.includes("//") || /[?#]/.test(model)) {
