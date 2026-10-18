@@ -88,6 +88,23 @@ export function createStreamController({ onDisconnect, onError, log, provider, m
   };
 }
 
+// A reset socket, an aborted fetch or a timed-out read: the upstream went away,
+// as opposed to a translator or executor throwing mid-stream.
+function isNetworkCloseError(error) {
+  const msg = error?.message || "";
+  const code = error?.code || error?.cause?.code || "";
+  return error?.name === "AbortError" ||
+    msg.includes("aborted") ||
+    msg.includes("socket hang up") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("EPIPE") ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "EPIPE" ||
+    code === "UND_ERR_SOCKET";
+}
+
 /**
  * Create transform stream with disconnect detection
  * Wraps existing transform stream and adds abort capability.
@@ -96,6 +113,9 @@ export function createStreamController({ onDisconnect, onError, log, provider, m
  * activity), not here — output of the transform stream may be silent
  * for long periods while raw bytes still flow (e.g. Kiro EventStream
  * binary frames buffering, Claude reasoning streams).
+ *
+ * @param {function} [onAbortTerminal] - Receives the error that ended the stream
+ * (undefined when it ended without one) and returns terminal SSE bytes to emit.
  */
 export function createDisconnectAwareStream(transformStream, streamController, onAbortTerminal = null) {
   const reader = transformStream.readable.getReader();
@@ -103,11 +123,11 @@ export function createDisconnectAwareStream(transformStream, streamController, o
   let terminalEmitted = false;
 
   // Emit a synthesized terminal payload (e.g. Responses response.failed + [DONE]) once
-  const emitTerminal = (controller) => {
+  const emitTerminal = (controller, error) => {
     if (terminalEmitted || !onAbortTerminal) return;
     terminalEmitted = true;
     try {
-      const bytes = onAbortTerminal();
+      const bytes = onAbortTerminal(error);
       if (bytes) controller.enqueue(bytes);
     } catch { /* best-effort terminal */ }
   };
@@ -136,25 +156,13 @@ export function createDisconnectAwareStream(transformStream, streamController, o
         writer.abort().catch(() => {});
 
         // Treat network resets / socket hang up / abort as graceful close
-        const msg = error?.message || "";
-        const code = error?.code || error?.cause?.code || "";
-        const isNetworkClose =
-          error.name === "AbortError" ||
-          msg.includes("aborted") ||
-          msg.includes("socket hang up") ||
-          msg.includes("ECONNRESET") ||
-          msg.includes("ETIMEDOUT") ||
-          msg.includes("EPIPE") ||
-          code === "ECONNRESET" ||
-          code === "ETIMEDOUT" ||
-          code === "EPIPE" ||
-          code === "UND_ERR_SOCKET";
+        const isNetworkClose = isNetworkCloseError(error);
 
         // Graceful close on network/abort, or when a structured terminal is available
-        // (Responses passthrough prefers response.failed + [DONE] over a raw transport error)
+        // (an in-band error frame beats a raw transport error the client cannot read)
         try {
           if (!wasConnected || isNetworkClose || onAbortTerminal) {
-            emitTerminal(controller);
+            emitTerminal(controller, error);
             controller.close();
           } else {
             controller.error(error);
@@ -192,6 +200,7 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
   let chunkCount = 0;
   let totalBytes = 0;
   let lastChunkAt = Date.now();
+  let stalled = false;
   const t0 = Date.now();
   const tag = "STREAM";
   const clearStall = () => {
@@ -201,6 +210,7 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
     clearStall();
     stallTimer = setTimeout(() => {
       stallTimer = null;
+      stalled = true;
       dbg(tag, `STALL TIMEOUT ${stallTimeoutMs}ms | chunks=${chunkCount} | bytes=${totalBytes} | sinceLast=${Date.now() - lastChunkAt}ms`);
       streamController.handleError?.(new Error("stream stall timeout"));
       streamController.abort?.();
@@ -244,10 +254,20 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
     .pipeThrough(upstreamTap)
     .pipeThrough(transformStream);
 
+  // 0.5.165 — hand onAbortTerminal a readable reason so the client's error frame
+  // says why the stream ended (upstream 93001213). kRouter also passes a non-network
+  // error's own message (e.g. an executor's mid-stream throw, upstream 092c84ea)
+  // rather than calling it a lost connection.
+  const abortReason = (error) => {
+    if (stalled) return "stream stall timeout";
+    if (error?.message && !isNetworkCloseError(error)) return error.message;
+    return "upstream connection lost";
+  };
+
   return createDisconnectAwareStream(
     { readable: transformedBody, writable: { getWriter: () => ({ abort: () => Promise.resolve() }) } },
     wrappedController,
-    onAbortTerminal
+    onAbortTerminal ? (error) => onAbortTerminal(abortReason(error)) : null
   );
 }
 

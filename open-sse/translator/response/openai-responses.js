@@ -5,6 +5,33 @@
 import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 
+// 0.5.165 — Chat Completions usage -> Responses usage for response.completed. Without
+// it Codex CLI keeps its context gauge at 0 and never auto-compacts (upstream da004655,
+// 7111db35). Stored in state.responsesUsage, never state.usage: the stream layer owns
+// state.usage for billing (finalizeStream) in normalizeUsage() shape. Zeroed
+// placeholders some upstreams put on every chunk return null, so they cannot freeze
+// response.completed before the real usage trailer arrives.
+function toResponsesUsage(usage) {
+  if (!usage || typeof usage !== "object") return null;
+
+  const inputTokens = [usage.input_tokens, usage.prompt_tokens].find(Number.isInteger);
+  const outputTokens = [usage.output_tokens, usage.completion_tokens].find(Number.isInteger);
+  if (inputTokens === undefined || outputTokens === undefined || inputTokens + outputTokens <= 0) {
+    return null;
+  }
+  // Total derived, not copied: Codex parses all three counts as required integers.
+  const responseUsage = {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: inputTokens + outputTokens
+  };
+  const cachedTokens = [usage.input_tokens_details?.cached_tokens, usage.prompt_tokens_details?.cached_tokens].find(Number.isInteger);
+  const reasoningTokens = [usage.output_tokens_details?.reasoning_tokens, usage.completion_tokens_details?.reasoning_tokens].find(Number.isInteger);
+  if (cachedTokens !== undefined) responseUsage.input_tokens_details = { cached_tokens: cachedTokens };
+  if (reasoningTokens !== undefined) responseUsage.output_tokens_details = { reasoning_tokens: reasoningTokens };
+  return responseUsage;
+}
+
 /**
  * Translate OpenAI chunk to Responses API events
  * @returns {Array} Array of events with { event, data } structure
@@ -13,8 +40,15 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
   if (!chunk) {
     return flushEvents(state);
   }
-  
-  if (!chunk.choices?.length) return [];
+
+  // 0.5.165 — capture usage before the choices guard: OpenAI sends it on a trailer
+  // whose choices array is empty, which the guard used to drop (upstream da004655).
+  const responseUsage = toResponsesUsage(chunk.usage);
+  if (responseUsage) state.responsesUsage = responseUsage;
+
+  if (!chunk.choices?.length) {
+    return state.completionPending && state.responsesUsage ? flushEvents(state) : [];
+  }
   
   const events = [];
   const nextSeq = () => ++state.seq;
@@ -89,6 +123,10 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     }
 
     if (content) {
+      // 0.5.165 — the answer starts, so thinking is over. reasoning_content upstreams
+      // (and Claude, now that claude-to-openai sends no "</think>") never close it any
+      // other way, so the reasoning item ended after the message (upstream 5d2cfbf3).
+      closeReasoning(state, emit);
       emitTextContent(state, emit, idx, content);
     }
   }
@@ -96,6 +134,7 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
   // Handle tool_calls (an empty array is truthy — require a real call, otherwise
   // we closed the message early and truncated the assistant text). upstream 10a923da
   if (delta.tool_calls && delta.tool_calls.length) {
+    closeReasoning(state, emit); // 0.5.165 — same as text (upstream 5d2cfbf3)
     closeMessage(state, emit, idx);
     for (const tc of delta.tool_calls) {
       emitToolCall(state, emit, tc);
@@ -107,7 +146,15 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     for (const i in state.msgItemAdded) closeMessage(state, emit, i);
     closeReasoning(state, emit);
     for (const i in state.funcCallIds) closeToolCall(state, emit, i);
-    sendCompleted(state, emit);
+    // 0.5.165 — usage often arrives after finish_reason, on its own trailer chunk.
+    // Completing here would freeze response.completed without it, so on the direct
+    // openai -> openai-responses route we wait; the trailer, [DONE], end of stream or
+    // the stream.js watchdog completes it. A pivot (claude/gemini/kiro -> openai ->
+    // here) never gets the terminal null chunk -- the first hop returns null for it --
+    // so waiting there would lose response.completed entirely (upstream da004655, 7111db35).
+    const flushReachesUs = state.targetFormat === FORMATS.OPENAI;
+    if (state.responsesUsage || !flushReachesUs) sendCompleted(state, emit);
+    else state.completionPending = true;
   }
 
   return events;
@@ -168,15 +215,17 @@ function closeReasoning(state, emit) {
       part: { type: "summary_text", text: state.reasoningBuf }
     });
 
+    const item = {
+      id: state.reasoningId,
+      type: "reasoning",
+      summary: [{ type: "summary_text", text: state.reasoningBuf }]
+    };
     emit("response.output_item.done", {
       type: "response.output_item.done",
       output_index: state.reasoningIndex,
-      item: {
-        id: state.reasoningId,
-        type: "reasoning",
-        summary: [{ type: "summary_text", text: state.reasoningBuf }]
-      }
+      item
     });
+    recordCompletedOutputItem(state, item);
   }
 }
 
@@ -240,16 +289,18 @@ function closeMessage(state, emit, idx) {
       part: { type: "output_text", annotations: [], logprobs: [], text: fullText }
     });
 
+    const item = {
+      id: msgId,
+      type: "message",
+      content: [{ type: "output_text", annotations: [], logprobs: [], text: fullText }],
+      role: "assistant"
+    };
     emit("response.output_item.done", {
       type: "response.output_item.done",
       output_index: parseInt(idx),
-      item: {
-        id: msgId,
-        type: "message",
-        content: [{ type: "output_text", annotations: [], logprobs: [], text: fullText }],
-        role: "assistant"
-      }
+      item
     });
+    recordCompletedOutputItem(state, item);
   }
 }
 
@@ -304,26 +355,42 @@ function closeToolCall(state, emit, idx) {
       arguments: args
     });
 
+    const item = {
+      id: `fc_${callId}`,
+      type: "function_call",
+      arguments: args,
+      call_id: callId,
+      name: state.funcNames[idx] || ""
+    };
     emit("response.output_item.done", {
       type: "response.output_item.done",
       output_index: parseInt(idx),
-      item: {
-        id: `fc_${callId}`,
-        type: "function_call",
-        arguments: args,
-        call_id: callId,
-        name: state.funcNames[idx] || ""
-      }
+      item
     });
+    recordCompletedOutputItem(state, item);
 
     state.funcItemDone[idx] = true;
     state.funcArgsDone[idx] = true;
   }
 }
 
+// 0.5.165 — response.completed carries the finished Response, so its output has to
+// repeat every item already sent in response.output_item.done. GitHub Copilot CLI and
+// the OpenAI SDK final-response helpers build the turn from the terminal event and
+// saw it empty (upstream 273f0c32). Adapted: keyed by item id in close order, not by
+// output_index -- on a single-choice stream reasoning, message and the first tool
+// call all carry output_index 0, and upstream's index key kept only the last one.
+// A repeated close of the same item overwrites in place. Lazily created because
+// stream.js and tests may hand us a state they built themselves.
+function recordCompletedOutputItem(state, item) {
+  state.completedOutputItems ??= new Map();
+  state.completedOutputItems.set(item.id, item);
+}
+
 function sendCompleted(state, emit) {
   if (!state.completedSent) {
     state.completedSent = true;
+    state.completionPending = false;
     emit("response.completed", {
       type: "response.completed",
       response: {
@@ -332,7 +399,9 @@ function sendCompleted(state, emit) {
         created_at: state.created,
         status: "completed",
         background: false,
-        error: null
+        error: null,
+        output: [...(state.completedOutputItems?.values() || [])],
+        ...(state.responsesUsage ? { usage: state.responsesUsage } : {})
       }
     });
   }

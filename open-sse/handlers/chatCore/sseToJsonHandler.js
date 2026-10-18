@@ -34,6 +34,18 @@ function pickAssistantMessageForChatCompletion(output) {
 }
 
 /**
+ * HTTP status for an error chunk found in an upstream SSE stream. 0.5.165 — a
+ * structured chunk may carry the upstream's real status (Qoder sends 403 for its
+ * billing envelope); keep it so the account loop locks and falls back on the right
+ * status instead of a blanket 502. Anything outside 400-599 gets `fallback`
+ * (upstream 2daf25ff, the generic half of 782c137b's Qoder work).
+ */
+export function streamErrorStatus(error, fallback = HTTP_STATUS.BAD_GATEWAY) {
+  const status = Number(error?.status);
+  return Number.isInteger(status) && status >= 400 && status <= 599 ? status : fallback;
+}
+
+/**
  * Parse OpenAI-style SSE text into a single chat completion JSON.
  * Used when provider forces streaming but client wants non-streaming.
  */
@@ -235,6 +247,10 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
         };
       }
 
+      // 0.5.165 — a Claude client gets a Claude message here too, as the chat branch
+      // below has since 0.5.163; this branch handed it a chat.completion (upstream 1d4335d4).
+      if (sourceFormat === FORMATS.CLAUDE) finalResp = openAICompletionToClaudeMessage(finalResp);
+
       return { success: true, response: new Response(JSON.stringify(finalResp), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
     } catch (err) {
       console.error("[ChatCore] Responses API SSE→JSON failed:", err);
@@ -250,7 +266,7 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
     // 0.5.130 (upstream 7c7fae39) — propagate a stream error as a 502 instead of
     // collapsing an incomplete/errored stream into a successful JSON response.
     if (parsed.error) {
-      return createErrorResult(HTTP_STATUS.BAD_GATEWAY, parsed.error.message || "Upstream SSE stream failed");
+      return createErrorResult(streamErrorStatus(parsed.error), parsed.error.message || "Upstream SSE stream failed");
     }
 
     if (onRequestSuccess) await onRequestSuccess();

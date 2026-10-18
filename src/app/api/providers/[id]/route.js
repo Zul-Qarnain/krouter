@@ -155,7 +155,9 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const updated = await updateProviderConnection(id, updateData);
+    // 0.5.165 — the edit dialog sends testStatus "active" only after the new key
+    // validated: drop the old key's stale locks/backoff with it (upstream 7fee56ba).
+    const updated = await updateProviderConnection(id, updateData, { reactivate: updateData.testStatus === "active" });
 
     // Hide sensitive fields
     const result = { ...updated };

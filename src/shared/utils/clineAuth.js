@@ -6,7 +6,12 @@ export function getClineAccessToken(token) {
   if (typeof token !== "string") return "";
   const trimmed = token.trim();
   if (!trimmed) return "";
-  return trimmed.startsWith("workos:") ? trimmed : `workos:${trimmed}`;
+  if (trimmed.toLowerCase().startsWith("workos:")) return trimmed;
+  // 0.5.165 — only Cline OAuth access tokens (WorkOS JWTs, "eyJ...") take the
+  // workos: prefix. ClinePass API keys ("clp_...") must go out verbatim, or
+  // api.cline.bot answers 401 (upstream f6e7cabe).
+  const isWorkOsJwt = /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(trimmed);
+  return isWorkOsJwt ? `workos:${trimmed}` : trimmed;
 }
 
 export function getClineAuthorizationHeader(token) {

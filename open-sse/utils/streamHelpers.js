@@ -1,4 +1,8 @@
 import { FORMATS } from "../translator/formats.js";
+import { buildErrorBody } from "./error.js";
+import { SSE_DONE } from "./sseConstants.js";
+
+const sharedEncoder = new TextEncoder();
 
 // Parse SSE data line
 export function parseSSELine(line, format = null) {
@@ -130,4 +134,19 @@ export function formatSSE(data, sourceFormat) {
   }
 
   return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+// 0.5.165 — terminal frames for a stream that aborted after HTTP 200 was already
+// sent, so the status can no longer change (upstream 93001213). OpenAI-compatible
+// clients need the error frame first, then [DONE]: openai-python raises APIError on
+// any data payload carrying an `error` key, checked before [DONE]. Claude clients
+// need `event: error`. Never a fabricated finish_reason: a truncated reply must not
+// look like a clean stop. Returns bytes, because onAbortTerminal output is enqueued
+// verbatim (same contract as buildAbortedResponsesTerminalBytes).
+export function buildStreamErrorBytes(statusCode, message, clientFormat) {
+  const { error } = buildErrorBody(statusCode, message);
+  const sse = clientFormat === FORMATS.CLAUDE
+    ? formatSSE({ type: "error", error }, FORMATS.CLAUDE)
+    : formatSSE({ error }, clientFormat) + SSE_DONE;
+  return sharedEncoder.encode(sse);
 }

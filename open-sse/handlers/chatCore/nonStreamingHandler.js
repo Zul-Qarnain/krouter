@@ -2,10 +2,11 @@ import { FORMATS } from "../../translator/formats.js";
 import { geminiFinishReasonToOpenAI } from "../../utils/geminiFinishReason.js";
 import { needsTranslation } from "../../translator/index.js";
 import { ollamaBodyToOpenAI } from "../../translator/response/ollama-to-openai.js";
+import { convertStopReason, refusalExplanation } from "../../translator/response/claude-to-openai.js";
 import { addBufferToUsage, filterUsageForFormat } from "../../utils/usageTracking.js";
 import { createErrorResult } from "../../utils/error.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
-import { parseSSEToOpenAIResponse } from "./sseToJsonHandler.js";
+import { parseSSEToOpenAIResponse, streamErrorStatus } from "./sseToJsonHandler.js";
 import { openAICompletionToClaudeMessage, openAICompletionToResponsesObject } from "./completionConverters.js";
 import { buildRequestDetail, extractRequestConfig, extractUsageFromResponse, saveUsageStats } from "./requestDetail.js";
 import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
@@ -14,6 +15,19 @@ import { detectEmptyCompletion, readCompletionShape, EMPTY_COMPLETION_STATUS } f
 
 
 
+
+// 0.5.165 — Cline (api.cline.bot) wraps a non-streaming completion in
+// {"success":true,"data":{...choices...}}; clients and the dashboard model test found
+// no `choices` (upstream 122f23ee). Opt-in by provider so no other body is ever
+// rewritten; the error envelope ({"success":false,...}) never matches.
+const CLINE_ENVELOPE_PROVIDERS = new Set(["cline", "clinepass"]);
+
+export function unwrapClineEnvelope(body, provider) {
+  if (!CLINE_ENVELOPE_PROVIDERS.has(provider)) return body;
+  const { success, data } = body || {};
+  if (success !== true || !data || typeof data !== "object" || Array.isArray(data)) return body;
+  return data;
+}
 
 // Request-detail summary for a Responses object, which has no choices[].
 function summarizeResponsesObject(r) {
@@ -148,15 +162,19 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
       }
     }
 
+    // 0.5.165 — a refusal's explanation becomes the text, as the streaming path sends it.
+    const refusalNote = refusalExplanation(responseBody);
+    if (refusalNote) textContent += refusalNote;
+
     const message = { role: "assistant" };
     if (textContent) message.content = textContent;
     if (thinkingContent) message.reasoning_content = thinkingContent;
     if (toolCalls.length > 0) message.tool_calls = toolCalls;
     if (!message.content && !message.tool_calls) message.content = "";
 
-    let finishReason = responseBody.stop_reason || "stop";
-    if (finishReason === "end_turn") finishReason = "stop";
-    if (finishReason === "tool_use") finishReason = "tool_calls";
+    // 0.5.165 — the streaming mapping, so max_tokens -> length and refusal ->
+    // content_filter instead of raw Claude values no OpenAI client knows (upstream 0f488c70).
+    const finishReason = convertStopReason(responseBody.stop_reason || "end_turn");
 
     const result = {
       id: `chatcmpl-${responseBody.id || Date.now()}`,
@@ -187,7 +205,7 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
 /**
  * Handle non-streaming response from provider.
  */
-export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, trackDone, appendLog }) {
+export async function handleNonStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, cloakActive, trackDone, appendLog }) {
   trackDone();
   const contentType = providerResponse.headers.get("content-type") || "";
   let responseBody;
@@ -203,7 +221,8 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     // failure, not a 200 whose content is the error text.
     if (parsed.error) {
       const code = String(parsed.error.code || parsed.error.type || "");
-      const status = /rate_limit|quota/i.test(code) ? HTTP_STATUS.RATE_LIMITED : HTTP_STATUS.BAD_GATEWAY;
+      // 0.5.165 — an explicit upstream 4xx/5xx on the chunk wins, as in sseToJsonHandler.
+      const status = streamErrorStatus(parsed.error, /rate_limit|quota/i.test(code) ? HTTP_STATUS.RATE_LIMITED : HTTP_STATUS.BAD_GATEWAY);
       appendLog({ status: `FAILED ${status}` });
       return createErrorResult(status, parsed.error.message || "Upstream stream failed");
     }
@@ -218,11 +237,14 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     }
   }
 
+  // Before anything reads choices or usage (0.5.165, see unwrapClineEnvelope).
+  responseBody = unwrapClineEnvelope(responseBody, provider);
+
   reqLogger.logProviderResponse(providerResponse.status, providerResponse.statusText, providerResponse.headers, responseBody);
   if (onRequestSuccess) await onRequestSuccess();
 
   // Decloak tool_use names once on raw Claude body, before any translation (INPUT side)
-  responseBody = decloakToolNames(responseBody, toolNameMap);
+  responseBody = decloakToolNames(responseBody, toolNameMap, cloakActive === true);
 
   const usage = extractUsageFromResponse(responseBody);
 

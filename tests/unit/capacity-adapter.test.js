@@ -9,15 +9,18 @@ import {
 import { detectRequiredCapabilities } from "../../open-sse/services/combo.js";
 import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
 
-const FALLBACK = "mmf/mimo-auto"; // our free vision-capable default (adapted from oc/mimo-v2.5-free)
-const visionOn = { capacityAdapter: { vision: { enabled: true, roundRobin: false, models: [] } } };
+// 0.5.165 — no implicit default any more (mmf/mimo-auto is a dead channel, see
+// vision-pool-no-dead-mimo-default.test.js), so these tests pick a pool model.
+const FALLBACK = "openai/gpt-4o"; // a vision-only pool model the user picked (no audio)
+const visionOn = { capacityAdapter: { vision: { enabled: true, roundRobin: false, models: [FALLBACK] } } };
 
 describe("0.5.125 capacity adapter — config resolution", () => {
-  it("mmf/mimo-auto is the free vision-capable default", () => {
-    expect(getCapabilitiesForModel("mmf", "mimo-auto").vision).toBe(true);
+  it("the pool model used here is vision-capable", () => {
+    expect(getCapabilitiesForModel("openai", "gpt-4o").vision).toBe(true);
+    expect(getCapabilitiesForModel("openai", "gpt-4o").audioInput).not.toBe(true);
   });
 
-  it("an enabled pool with no models falls back to mmf/mimo-auto (toggle is never a no-op)", () => {
+  it("an enabled pool returns the models the user picked", () => {
     expect(getCapacityAdapterConfig("vision", visionOn).models).toEqual([FALLBACK]);
   });
 
@@ -27,9 +30,9 @@ describe("0.5.125 capacity adapter — config resolution", () => {
     expect(getCapacityAdapterModels(visionOn)).toEqual([FALLBACK]); // only vision pool
   });
 
-  it("honours an explicitly configured pool over the default fallback", () => {
-    const s = { capacityAdapter: { vision: { enabled: true, models: ["xiaomi-mimo/mimo-v2.5"] } } };
-    expect(getCapacityAdapterConfig("vision", s).models).toEqual(["xiaomi-mimo/mimo-v2.5"]);
+  it("honours an explicitly configured pool", () => {
+    const s = { capacityAdapter: { vision: { enabled: true, models: ["gemini/gemini-2.5-flash"] } } };
+    expect(getCapacityAdapterConfig("vision", s).models).toEqual(["gemini/gemini-2.5-flash"]);
   });
 });
 

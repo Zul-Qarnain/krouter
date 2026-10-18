@@ -1,4 +1,12 @@
 import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, ACCOUNT_VERIFY_COOLDOWN_MS } from "../config/errorConfig.js";
+import { resolveProviderAlias } from "./model.js";
+
+// 0.5.165 — statuses that speak about the credential. Any other 4xx no rule
+// claims was caused by the request itself (upstream 20a43f5a).
+const ACCOUNT_SCOPED_4XX = new Set([401, 402, 403, 429]);
+// Executors whose 4xx status says nothing about the cause: cursor.js reports every
+// non-rate-limit Connect error (auth, plan, quota) as 400. Keep the old default there.
+const OPAQUE_4XX_PROVIDERS = new Set(["cursor"]);
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)
@@ -18,14 +26,18 @@ export function getQuotaCooldown(backoffLevel = 0) {
  * @param {number} status - HTTP status code
  * @param {string} errorText - Error message text
  * @param {number} backoffLevel - Current backoff level for exponential backoff
- * @returns {{ shouldFallback: boolean, cooldownMs: number, newBackoffLevel?: number, accountLock?: boolean }}
+ * @param {string|null} provider - Provider id or alias; enables provider-scoped rules
+ * @returns {{ shouldFallback: boolean, cooldownMs: number, newBackoffLevel?: number, accountLock?: boolean, requestScoped?: boolean }}
  */
-export function checkFallbackError(status, errorText, backoffLevel = 0) {
+export function checkFallbackError(status, errorText, backoffLevel = 0, provider = null) {
   const lowerError = errorText
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()
     : "";
+  // 0.5.165 — provider-scoped rules (upstream 9f41ee75); accept "cx" as well as "codex".
+  const providerId = provider ? resolveProviderAlias(provider) : null;
 
   for (const rule of ERROR_RULES) {
+    if (rule.provider && rule.provider !== providerId) continue;
     // Text-based rule: match substring in error message
     if (rule.text && lowerError && lowerError.includes(rule.text)) {
       if (rule.backoff) {
@@ -52,6 +64,16 @@ export function checkFallbackError(status, errorText, backoffLevel = 0) {
       }
       return { shouldFallback: true, cooldownMs: rule.cooldownMs, accountLock: rule.accountLock || false, permanent: rule.permanent || false };
     }
+  }
+
+  // 0.5.165 — a 4xx no rule above claimed is about the request (malformed body,
+  // unsupported parameter, validation), not the credential (upstream 20a43f5a).
+  // The old 30s default locked a healthy account, and with one connection every
+  // request in that window failed with a copy of this error. No lock, no account
+  // failover. requestScoped tells a combo it may still try its NEXT member: a
+  // different model can accept what this one rejected. 404 keeps its status rule.
+  if (status >= 400 && status < 500 && !ACCOUNT_SCOPED_4XX.has(status) && !OPAQUE_4XX_PROVIDERS.has(providerId)) {
+    return { shouldFallback: false, cooldownMs: 0, requestScoped: true };
   }
 
   // Default: transient cooldown for any unmatched error
@@ -150,6 +172,25 @@ export function getEarliestModelLockUntil(connection) {
     if (!earliest || t < earliest) earliest = t;
   }
   return earliest ? new Date(earliest).toISOString() : null;
+}
+
+/**
+ * 0.5.165 — latest modelLock_* expiry still in the future, or null. The connection
+ * card counts down to it: the earliest raw value can be an expired key (only a
+ * success clears those), which hid an active month-long account hold's countdown.
+ * @param {object|null} connection
+ * @param {number} [now]
+ * @returns {string|null} ISO timestamp
+ */
+export function getLatestModelLockUntil(connection, now = Date.now()) {
+  if (!connection) return null;
+  let latest = 0;
+  for (const [key, val] of Object.entries(connection)) {
+    if (!key.startsWith(MODEL_LOCK_PREFIX) || !val) continue;
+    const t = new Date(val).getTime();
+    if (Number.isFinite(t) && t > now && t > latest) latest = t;
+  }
+  return latest ? new Date(latest).toISOString() : null;
 }
 
 /**

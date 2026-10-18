@@ -33,11 +33,28 @@ const ANTHROPIC_BETA_BASE = [
 ];
 const ANTHROPIC_BETA_HEAVY_AGENT = ["advanced-tool-use-2025-11-20", "effort-2025-11-24"];
 
-export function selectAnthropicBeta(model = "") {
-  const flags = [...ANTHROPIC_BETA_BASE];
+// 0.5.165 — redact-thinking makes Anthropic return signature-only thinking blocks.
+// Right for clients that never render thinking, but it blanks the summaries a
+// request asked for with thinking.display "summarized" (upstream f4f06f29).
+const ANTHROPIC_BETA_REDACT_THINKING = "redact-thinking-2026-02-12";
+
+export function selectAnthropicBeta(model = "", body = null) {
+  const wantsSummaries = body?.thinking?.display === "summarized";
+  const flags = ANTHROPIC_BETA_BASE.filter(flag => !(wantsSummaries && flag === ANTHROPIC_BETA_REDACT_THINKING));
   if (/claude-(opus|sonnet)/i.test(model)) flags.push(...ANTHROPIC_BETA_HEAVY_AGENT);
   return flags.join(",");
 }
+
+// 0.5.165 — one source for the spoofed Claude Code version: the User-Agent below and
+// the billing header (claudeCloaking.js) must agree. Anthropic answers Opus 5.5 from a
+// claude-cli below 2.1.280 with 400 claude_code_version_too_old (upstream 84035760).
+export const CLAUDE_CLI_VERSION = "2.1.280";
+
+// 0.5.165 — one source for the spoofed Codex CLI version. OpenAI's backend filters
+// backend-api/codex/models by the client version it is told, so a stale value hides
+// the whole GPT-6 family; the User-Agent below, the image executor and the roster
+// fetch must all send the same number (upstream a7047a07, ca6e8407).
+export const CODEX_CLI_VERSION = "0.159.0";
 
 // Shared Claude-compatible API headers (reused across claude-format providers)
 // 6acc3bb9 — lowercase `anthropic-version` so a client-forwarded lowercase copy on
@@ -52,7 +69,7 @@ export const CLAUDE_CLI_SPOOF_HEADERS = {
   "anthropic-version": "2023-06-01",
   "Anthropic-Beta": selectAnthropicBeta("claude-opus"),
   "Anthropic-Dangerous-Direct-Browser-Access": "true",
-  "User-Agent": "claude-cli/2.1.258 (external, sdk-cli)",
+  "User-Agent": `claude-cli/${CLAUDE_CLI_VERSION} (external, sdk-cli)`,
   "X-App": "cli",
   "X-Stainless-Helper-Method": "stream",
   "X-Stainless-Retry-Count": "0",
@@ -94,7 +111,7 @@ export const PROVIDERS = {
     format: "openai-responses",
     headers: {
       "originator": "codex_cli_rs",
-      "User-Agent": "codex_cli_rs/0.136.0"
+      "User-Agent": `codex_cli_rs/${CODEX_CLI_VERSION}`
     },
     clientId: "app_EMoamEEZ73f0CkXaXp7hrann",
     tokenUrl: "https://auth.openai.com/oauth/token",
@@ -287,11 +304,10 @@ export const PROVIDERS = {
     format: "openai",
     headers: {}
   },
-  opencode: {
-    baseUrl: "http://localhost:4096/v1/chat/completions",
-    format: "openai",
-    headers: {}
-  },
+  // 0.5.165 — a dead `opencode` entry pointing at http://localhost:4096 used to sit
+  // here. A duplicate object key wins by position, so the real opencode.ai entry
+  // further down silently overrode it: the file read like a working localhost
+  // config while that half was unreachable. Removed, not merged.
   cline: {
     baseUrl: "https://api.cline.bot/api/v1/chat/completions",
     format: "openai",

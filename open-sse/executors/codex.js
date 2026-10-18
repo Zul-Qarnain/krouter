@@ -1,17 +1,18 @@
 import { createHash } from "crypto";
 import { BaseExecutor } from "./base.js";
 import { CODEX_DEFAULT_INSTRUCTIONS } from "../config/codexInstructions.js";
-import { PROVIDERS } from "../config/providers.js";
+import { PROVIDERS, CODEX_CLI_VERSION } from "../config/providers.js";
 import {
   refreshProviderCredentials,
   shouldRefreshCredentials,
 } from "../services/oauthCredentialManager.js";
 import { normalizeResponsesInput } from "../translator/helpers/responsesApiHelper.js";
 import { fetchImageAsBase64 } from "../translator/helpers/imageHelper.js";
-import { getModelUpstreamId } from "../config/providerModels.js";
+import { getModelUpstreamId, getProviderModels } from "../config/providerModels.js";
 import { getConsistentMachineId } from "../../src/shared/utils/machineId.js";
 import { DEFAULT_RETRY_CONFIG, resolveRetryEntry } from "../config/runtimeConfig.js";
 import { dbg } from "../utils/debugLog.js";
+import { stripCodexUnsupportedPatterns } from "../utils/codexToolSchema.js";
 
 // SSE error patterns inside 200-OK body that should trigger retry as if 503
 const CODEX_SSE_OVERLOADED_PATTERNS = ["server_is_overloaded", "service_unavailable_error"];
@@ -23,6 +24,33 @@ const assistantSessionMap = new Map();
 
 // Server-generated item id prefixes that Codex /responses cannot resolve when store=false
 const SERVER_ID_PATTERN = /^(rs|fc|resp|msg)_/;
+
+// 0.5.165 — "Responses Lite": the request shape Codex 0.155 introduced for the
+// GPT-6 Sol/Luna family (upstream 95600db1). Those models are served behind an
+// internal header and want tools plus instructions as input prefix items instead
+// of top-level fields. Which ids need it is catalog data, so a new release only
+// has to set responsesLite there.
+const CODEX_LITE_EFFORT_FLOOR = "low";
+const CODEX_LITE_UNSUPPORTED_EFFORTS = new Set(["none", "minimal", "off"]);
+
+function isCodexResponsesLiteModel(model) {
+  if (typeof model !== "string" || !model) return false;
+  return getProviderModels("cx").some((entry) => entry.id === model && entry.responsesLite === true);
+}
+
+function hasHostedWebSearch(tools) {
+  return Array.isArray(tools) && tools.some((tool) => tool?.type === "web_search");
+}
+
+function toolIdentity(tool) {
+  return `${tool?.type}:${tool?.name || tool?.function?.name || ""}`;
+}
+
+// Lite only accepts low..max, so the levels the legacy transport allows for
+// reasoning-off have to be lifted instead of rejected upstream.
+function clampLiteEffort(effort) {
+  return CODEX_LITE_UNSUPPORTED_EFFORTS.has(effort) ? CODEX_LITE_EFFORT_FLOOR : effort;
+}
 
 // Hosted tool types that Codex/OpenAI Responses executes server-side
 const CODEX_HOSTED_TOOL_TYPES = new Set([
@@ -38,7 +66,10 @@ const CODEX_PASSTHROUGH_TOOL_TYPES = new Set(["custom"]);
 // Allowlist of fields accepted by Codex Responses API — anything else is stripped
 const RESPONSES_API_ALLOWLIST = new Set([
   "model", "input", "instructions", "tools", "tool_choice", "stream", "store",
-  "reasoning", "service_tier", "include", "prompt_cache_key", "client_metadata"
+  // 0.5.165 — parallel_tool_calls is part of the Responses Lite shape (upstream
+  // 95600db1). The legacy transport still deletes it below.
+  "reasoning", "service_tier", "include", "prompt_cache_key", "client_metadata",
+  "parallel_tool_calls"
 ]);
 
 // Convert role=system → role=developer in body.input (keeps content in cacheable prefix)
@@ -52,13 +83,18 @@ function convertSystemToDeveloperRole(body) {
 }
 
 // Strip server-generated item IDs (rs_/fc_/resp_/msg_) from input — avoids 404 with store=false
-function stripStoredItemReferences(body) {
+// 0.5.165 — except the developer msg_ ids of a request that already arrived in the
+// Responses Lite shape: there they are part of the prefix the real Codex CLI
+// built, not a stored-item reference (upstream 95600db1).
+function stripStoredItemReferences(body, preserveLitePrefix = false) {
   if (!Array.isArray(body.input)) return;
   body.input = body.input.filter((item) => {
     if (typeof item === "string" && SERVER_ID_PATTERN.test(item)) return false;
     if (item && typeof item === "object" && !Array.isArray(item)) {
       if (item.type === "item_reference") return false;
-      if (typeof item.id === "string" && SERVER_ID_PATTERN.test(item.id)) delete item.id;
+      const isLiteDeveloperId = preserveLitePrefix && item.role === "developer"
+        && typeof item.id === "string" && item.id.startsWith("msg_");
+      if (typeof item.id === "string" && SERVER_ID_PATTERN.test(item.id) && !isLiteDeveloperId) delete item.id;
     }
     return true;
   });
@@ -68,6 +104,9 @@ function stripStoredItemReferences(body) {
 function normalizeCodexTools(body) {
   if (!Array.isArray(body.tools)) return;
   const validNames = new Set();
+  // 0.5.165 — Codex's schema validator has no Unicode property escapes; a `pattern`
+  // carrying `\p{...}` 400s the whole request on every account (upstream 781c18d8).
+  const patternStats = { removed: 0 };
   body.tools = body.tools.filter((tool) => {
     if (!tool || typeof tool !== "object" || Array.isArray(tool)) return false;
     const type = typeof tool.type === "string" ? tool.type : "";
@@ -77,6 +116,13 @@ function normalizeCodexTools(body) {
           const n = typeof st?.name === "string" ? st.name.trim().slice(0, 128) : "";
           if (n) validNames.add(n);
         }
+        // New sub-tool objects only where a pattern was stripped (copy-on-write).
+        const subTools = tool.tools.map((st) => {
+          if (!st?.parameters || typeof st.parameters !== "object") return st;
+          const parameters = stripCodexUnsupportedPatterns(st.parameters, patternStats);
+          return parameters === st.parameters ? st : { ...st, parameters };
+        });
+        if (subTools.some((st, i) => st !== tool.tools[i])) tool.tools = subTools;
       }
       return true;
     }
@@ -97,14 +143,21 @@ function normalizeCodexTools(body) {
     // by strict Responses backends, and a client already speaking Responses format
     // bypasses the translator that would otherwise fill it in.
     if (parameters.type === "object" && !parameters.properties) parameters = { ...parameters, properties: {} };
+    // 0.5.165 — keep an explicit boolean strict flag; the rebuild below dropped it
+    // (upstream 0dd4d6be).
+    const strict = typeof tool.strict === "boolean" ? tool.strict : fn?.strict;
     for (const k of Object.keys(tool)) delete tool[k];
     tool.type = "function";
     tool.name = name.slice(0, 128);
     if (description) tool.description = description;
-    tool.parameters = parameters;
+    tool.parameters = stripCodexUnsupportedPatterns(parameters, patternStats);
+    if (typeof strict === "boolean") tool.strict = strict;
     validNames.add(name);
     return true;
   });
+  if (patternStats.removed > 0) {
+    dbg("CODEX", `stripped ${patternStats.removed} unsupported tool schema pattern(s)`);
+  }
   // Drop tool_choice if it references an unknown function name
   if (body.tool_choice && typeof body.tool_choice === "object" && !Array.isArray(body.tool_choice)) {
     if (body.tool_choice.type === "function") {
@@ -208,8 +261,19 @@ export class CodexExecutor extends BaseExecutor {
    * Override headers to add codex-specific identity headers.
    * transformRequest runs BEFORE buildHeaders, sets this._currentSessionId.
    */
-  buildHeaders(credentials, stream = true) {
+  buildHeaders(credentials, stream = true, _url = null, model = null, body = null) {
     const headers = super.buildHeaders(credentials, stream);
+    // 0.5.165 — the GPT-6 Sol/Luna family is only served behind this header, and
+    // only for a request actually in the Lite shape: hosted web_search cannot run
+    // from a Lite input prefix, so transformRequest falls back to regular
+    // Responses and leaves the tool at the top level (upstream 95600db1, 7bf93178).
+    if (isCodexResponsesLiteModel(model && getModelUpstreamId("cx", model)) && !hasHostedWebSearch(body?.tools)) {
+      headers["x-openai-internal-codex-responses-lite"] = "true";
+    }
+    // 0.5.165 — the real codex CLI sends its version on every call, not just the
+    // image one; a missing or stale identity is how gpt-6.1-sol got rejected
+    // (upstream a7047a07, ca6e8407).
+    if (!headers["version"]) headers["version"] = CODEX_CLI_VERSION;
     headers["session_id"] = this._currentSessionId || credentials?.connectionId || "default";
     // Identify client type to Codex backend (matches official codex CLI)
     if (!headers["originator"]) headers["originator"] = "codex_cli_rs";
@@ -392,6 +456,33 @@ export class CodexExecutor extends BaseExecutor {
     const normalized = normalizeResponsesInput(body.input);
     if (normalized) body.input = normalized;
 
+    // 0.5.165 — decide the transport before anything reshapes the body. Hosted
+    // web_search cannot be executed from a Responses Lite input prefix, so a
+    // request that asks for it switches back to regular Responses and the tools a
+    // previous Lite turn left in an additional_tools item are hoisted back to the
+    // top level, deduped by type+name (upstream 95600db1, 7bf93178).
+    const upstreamModel = getModelUpstreamId("cx", body.model || model);
+    const isLiteModel = isCodexResponsesLiteModel(upstreamModel);
+    let convertedLitePrefix = false;
+    if (isLiteModel && Array.isArray(body.input)) {
+      const prefixes = body.input.filter((item) => item?.type === "additional_tools");
+      const prefixedTools = prefixes.flatMap((item) => (Array.isArray(item.tools) ? item.tools : []));
+      if (hasHostedWebSearch(body.tools) || hasHostedWebSearch(prefixedTools)) {
+        const tools = Array.isArray(body.tools) ? [...body.tools] : [];
+        const seen = new Set(tools.map(toolIdentity));
+        for (const tool of prefixedTools) {
+          const id = toolIdentity(tool);
+          if (seen.has(id)) continue;
+          seen.add(id);
+          tools.push(tool);
+        }
+        body.tools = tools;
+        convertedLitePrefix = prefixes.length > 0;
+        body.input = body.input.filter((item) => item?.type !== "additional_tools");
+      }
+    }
+    const responsesLite = isLiteModel && !hasHostedWebSearch(body.tools);
+
     // Ensure input is present and non-empty (Codex API rejects empty input)
     if (!body.input || (Array.isArray(body.input) && body.input.length === 0)) {
       body.input = [{ type: "message", role: "user", content: [{ type: "input_text", text: "..." }] }];
@@ -400,15 +491,18 @@ export class CodexExecutor extends BaseExecutor {
     // Keep system prompts in body.input as role=developer so they stay in the cacheable prefix
     convertSystemToDeveloperRole(body);
     // Strip server-generated item IDs (rs_/fc_/resp_/msg_) — Codex /responses can't resolve when store=false
-    stripStoredItemReferences(body);
+    stripStoredItemReferences(body, responsesLite);
     // Flatten function tools + drop unsupported types
     normalizeCodexTools(body);
 
     // Ensure streaming is enabled (Codex API requires it)
     body.stream = true;
 
-    // If no instructions provided, inject default Codex instructions
-    if (!body.instructions || body.instructions.trim() === "") {
+    // If no instructions provided, inject default Codex instructions.
+    // 0.5.165 — not for Lite (the prefix below carries them), and not when a Lite
+    // prefix was just hoisted out for hosted search: that request already has its
+    // own developer instructions in body.input (upstream 95600db1, 7bf93178).
+    if (!responsesLite && !convertedLitePrefix && (!body.instructions || body.instructions.trim() === "")) {
       body.instructions = CODEX_DEFAULT_INSTRUCTIONS;
     }
 
@@ -421,7 +515,35 @@ export class CodexExecutor extends BaseExecutor {
     }
 
     // Map virtual Codex review models to the upstream Codex model before suffix parsing.
-    body.model = getModelUpstreamId("cx", body.model || model);
+    body.model = upstreamModel;
+
+    // 0.5.165 — build the Lite prefix: tools and instructions move into input
+    // items, the top-level fields go empty (upstream 95600db1).
+    if (responsesLite) {
+      const input = Array.isArray(body.input) ? body.input : [body.input];
+      const hasLitePrefix = input.some((item) => item?.type === "additional_tools");
+      if (!hasLitePrefix) {
+        const instructions = typeof body.instructions === "string" && body.instructions.trim()
+          ? body.instructions
+          : CODEX_DEFAULT_INSTRUCTIONS;
+        const prefix = [{
+          type: "additional_tools",
+          role: "developer",
+          tools: Array.isArray(body.tools) ? body.tools : [],
+        }];
+        if (instructions) {
+          prefix.push({ type: "message", role: "developer", content: [{ type: "input_text", text: instructions }] });
+        }
+        input.unshift(...prefix);
+      }
+      body.input = input;
+      body.instructions = "";
+      body.tools = null;
+      body.tool_choice ||= "auto";
+      body.parallel_tool_calls = false;
+    } else {
+      delete body.parallel_tool_calls;
+    }
 
     // Extract thinking level from model name suffix
     // e.g., gpt-5.3-codex-high → high, gpt-5.3-codex → medium (default)
@@ -437,12 +559,17 @@ export class CodexExecutor extends BaseExecutor {
     }
 
     // Priority: explicit reasoning.effort > reasoning_effort param > model suffix > default (medium)
+    // 0.5.165 — Lite defaults to medium, takes no summary and adds
+    // context: "all_turns" (upstream 95600db1).
     if (!body.reasoning) {
-      const effort = body.reasoning_effort || modelEffort || 'low';
-      body.reasoning = { effort, summary: "auto" };
-    } else if (!body.reasoning.summary) {
-      body.reasoning.summary = "auto";
+      const raw = body.reasoning_effort || modelEffort || (responsesLite ? 'medium' : 'low');
+      const effort = responsesLite ? clampLiteEffort(raw) : raw;
+      body.reasoning = responsesLite ? { effort } : { effort, summary: "auto" };
+    } else {
+      if (responsesLite && body.reasoning.effort) body.reasoning.effort = clampLiteEffort(body.reasoning.effort);
+      if (!responsesLite && !body.reasoning.summary) body.reasoning.summary = "auto";
     }
+    if (responsesLite) body.reasoning.context = "all_turns";
     delete body.reasoning_effort;
 
     // Include reasoning encrypted content (required by Codex backend for reasoning models)

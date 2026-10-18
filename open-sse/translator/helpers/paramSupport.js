@@ -10,8 +10,12 @@
 
 // Each rule:
 //   provider?  string  — restrict to this provider id; omit to apply globally
-//   match      RegExp | (model) => boolean  — predicate on the model id
-//   drop       string[]  — request-body keys to remove when both checks pass
+//   match?     RegExp | (model) => boolean  — predicate on the model id; omit to
+//              match every model (0.5.165 — provider-only rules used to throw)
+//   drop?      string[]  — request-body keys to remove when both checks pass
+//   dropMessageFields?  string[]  — keys to remove from assistant messages
+const REPLAYED_REASONING_FIELDS = ["reasoning_content", "reasoning", "reasoning_details"];
+
 const STRIP_RULES = [
   // All Claude models: `temperature` is rejected by the upstream Anthropic API
   // on OpenAI-compatible routes (400 "deprecated for this model") — not just the
@@ -40,10 +44,33 @@ const STRIP_RULES = [
     match: (m) => /claude/i.test(m) && !/claude.*(opus|sonnet).*4[.\-]6/i.test(m),
     drop: ["thinking", "reasoning_effort"],
   },
+
+  // 0.5.165 (upstream 7c2b1fe3) — strict OpenAI-compatible validators reject
+  // unknown assistant-message fields. Clients driving reasoning models (Hermes
+  // Agent, the DeepSeek/Kimi convention) echo the prior turn's reasoning on every
+  // assistant message: Groq 400, Mistral 422 ("extra_forbidden"), Cerebras 400,
+  // which knocks these providers out of every multi-turn combo. Providers that
+  // *require* the field (DeepSeek, Kimi) are handled by reasoningContentInjector.
+  { provider: "groq", dropMessageFields: REPLAYED_REASONING_FIELDS },
+  { provider: "mistral", dropMessageFields: REPLAYED_REASONING_FIELDS },
+  { provider: "cerebras", dropMessageFields: REPLAYED_REASONING_FIELDS },
 ];
 
 function matches(rule, model) {
+  if (!rule.match) return true;
   return typeof rule.match === "function" ? rule.match(model) : rule.match.test(model);
+}
+
+// 0.5.165 — copy-on-write: the message objects may be the client's own, so build
+// new ones rather than deleting in place (upstream 7c2b1fe3 deleted in place).
+function dropAssistantFields(messages, fields) {
+  let changed = false;
+  const next = messages.map((msg) => {
+    if (!msg || msg.role !== "assistant" || !fields.some((k) => msg[k] !== undefined)) return msg;
+    changed = true;
+    return Object.fromEntries(Object.entries(msg).filter(([k]) => !fields.includes(k)));
+  });
+  return changed ? next : messages;
 }
 
 /**
@@ -60,8 +87,11 @@ export function stripUnsupportedParams(provider, model, body) {
   for (const rule of STRIP_RULES) {
     if (rule.provider && rule.provider !== provider) continue;
     if (!matches(rule, model)) continue;
-    for (const key of rule.drop) {
+    for (const key of rule.drop || []) {
       if (body[key] !== undefined) delete body[key];
+    }
+    if (Array.isArray(rule.dropMessageFields) && Array.isArray(body.messages)) {
+      body.messages = dropAssistantFields(body.messages, rule.dropMessageFields);
     }
   }
   return body;

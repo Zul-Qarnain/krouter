@@ -1,6 +1,7 @@
 "use server";
 
 import { NextResponse } from "next/server";
+import { resolveCliApiKey } from "../resolveApiKey.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -81,7 +82,8 @@ export async function POST(request) {
     } catch { /* No existing config */ }
 
     const endpointUrl = `${baseUrl}/chat/completions#models.ai.azure.com`;
-    const keyToUse = apiKey || "sk_krouter";
+    // 0.5.165 — never write the sk_krouter placeholder; it 401s under requireApiKey (upstream 06eda8b0).
+    const keyToUse = await resolveCliApiKey(apiKey);
 
     const newEntry = {
       name: "kRouter",

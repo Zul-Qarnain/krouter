@@ -1,5 +1,7 @@
 // Tool call helper functions for translator
 
+import { FORMATS } from "../formats.js";
+
 // Anthropic tool_use.id must match: ^[a-zA-Z0-9_-]+$
 const TOOL_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
@@ -183,4 +185,16 @@ export function fixMissingToolResponses(body) {
 export function defaultClaudeToolType(tools) {
   if (!Array.isArray(tools)) return tools;
   return tools.map(tool => tool?.type ? tool : { ...tool, type: "custom" });
+}
+
+// 0.5.165 — only the gateways listed here reject a typeless Claude tool. Applying
+// the default everywhere (the v0.5.153 port) broke strict anthropic-compatible
+// gateways that accept only the typeless shape: DeepSeek /anthropic answers 400
+// "unknown variant `custom`" (upstream 998bb3d9).
+export const CLAUDE_TOOL_TYPE_REQUIRED = new Set(["minimax", "minimax-cn"]);
+
+export function shouldDefaultClaudeToolType(provider, finalFormat, tools) {
+  return finalFormat === FORMATS.CLAUDE
+    && Array.isArray(tools)
+    && CLAUDE_TOOL_TYPE_REQUIRED.has(provider);
 }

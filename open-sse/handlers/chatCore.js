@@ -1,4 +1,5 @@
 import { detectFormat, getTargetFormat } from "../services/provider.js";
+import { isClaudeCloakingActive } from "../utils/claudeCloaking.js";
 import { translateRequest } from "../translator/index.js";
 import { FORMATS } from "../translator/formats.js";
 import { normalizeClaudePassthrough } from "../translator/helpers/claudeHelper.js";
@@ -8,7 +9,7 @@ import { createStreamController } from "../utils/streamHandler.js";
 import { refreshWithRetry } from "../services/tokenRefresh.js";
 import { createRequestLogger } from "../utils/requestLogger.js";
 import { getModelTargetFormat, getModelStrip, getModelUpstreamId, getModelType, PROVIDER_ID_TO_ALIAS } from "../config/providerModels.js";
-import { defaultClaudeToolType } from "../translator/helpers/toolCallHelper.js";
+import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/helpers/toolCallHelper.js";
 import { createErrorResult, parseUpstreamError, formatProviderError } from "../utils/error.js";
 import { resolveDeprecatedModel } from "../services/modelDeprecation.js";
 import { stripUnsupportedFields } from "../services/modelStrip.js";
@@ -51,6 +52,26 @@ export function rotateWorkingCreds(workingCreds, result) {
     };
   }
   return workingCreds;
+}
+
+// 0.5.165 — client headers an executor or translator may read, as
+// credentials.rawHeaders: OpenCode Go's own session id, Cursor's Claude Code UA
+// check, Kiro's interleaved-thinking budget. A whitelist, never the whole set:
+// authorization / x-api-key / cookie carry the kRouter key (upstream aba4c45d).
+const FORWARDABLE_CLIENT_HEADERS = new Set(["user-agent", "anthropic-beta", "x-claude-code-session-id"]);
+const FORWARDABLE_CLIENT_HEADER_PREFIXES = ["x-opencode-"];
+
+export function pickForwardableClientHeaders(headers) {
+  if (!headers || typeof headers !== "object") return {};
+  const picked = {};
+  for (const [rawKey, value] of Object.entries(headers)) {
+    const key = rawKey.toLowerCase();
+    if (typeof value !== "string") continue;
+    if (FORWARDABLE_CLIENT_HEADERS.has(key) || FORWARDABLE_CLIENT_HEADER_PREFIXES.some((p) => key.startsWith(p))) {
+      picked[key] = value;
+    }
+  }
+  return picked;
 }
 
 export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled = false, headroomUrl, headroomCompressUserMessages = false, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled = false, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform = null, onPxpipeEvent = null, sourceFormatOverride, providerThinking, settings = null }) {
@@ -98,11 +119,15 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // the non-streaming path, tries to parse an SSE body as JSON, and hands the
   // client an empty message. grok-cli and codebuddy-cn both force stream in
   // their executors, so both must be listed here.
+  // 0.5.165 — opencode joins them: OpenCode Free answers stream:false with
+  // 403 FreeTierError on every model, so its executor forces the upstream stream
+  // (upstream 5bdcd5e7).
   const providerRequiresStreaming = provider === "openai"
     || provider === "codex"
     || provider === "commandcode"
     || provider === "grok-cli"
-    || provider === "codebuddy-cn";
+    || provider === "codebuddy-cn"
+    || provider === "opencode";
   let stream = providerRequiresStreaming ? true : (body.stream !== false);
 
   // DeepSeek-TUI: interactive TUI panel sends stream:true and needs SSE.
@@ -130,6 +155,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const clientTool = detectClientTool(clientRawRequest?.headers || {}, body);
   const passthrough = isNativePassthrough(clientTool, provider);
 
+  // 0.5.165 — a per-request copy carries the whitelisted client headers to the
+  // translator and executor; the caller's credentials object is shared across
+  // concurrent requests and is never written (upstream aba4c45d).
+  const requestCredentials = credentials
+    ? { ...credentials, rawHeaders: pickForwardableClientHeaders(clientRawRequest?.headers) }
+    : credentials;
+
   // 0.5.33 — cacheControlMode: "auto" | "always" | "never" (see settingsRepo).
   // Hoisted up so the translateRequest call below can pass preserveCacheControl.
   const cacheControlMode = settings?.cacheControlMode || "auto";
@@ -139,6 +171,23 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     cacheControlMode === "never" ? false :
     cacheControlMode === "always" ? isClaudeShapeUpstream :
     /* "auto" */ (passthrough && clientTool === "claude" && provider === "claude");
+
+  // 0.5.104 (upstream c9926897) — per-request opt-out. A client can send
+  // `X-9Router-Token-Saver: off` to bypass ALL token savers (RTK, Caveman,
+  // Ponytail) for one request without touching the global dashboard toggles.
+  const tokenSaverEnabled = clientRawRequest?.headers?.[TOKEN_SAVER_HEADER]?.toLowerCase() !== "off";
+
+  // 0.5.165 — openai-to-cursor rewrites role:"tool" messages into user text, so
+  // the post-translate RTK pass below finds no tool results for Cursor. Compress
+  // a copy of the source body before translation instead and skip that pass. A
+  // copy, never the client's body: a combo retry re-sends it (upstream c933eefc).
+  const rtkBeforeTranslate = provider === "cursor" && !passthrough && !isClaudeDirectCachePath && tokenSaverEnabled && !!rtkEnabled;
+  let translationInput = body;
+  let preTranslateRtkStats = null;
+  if (rtkBeforeTranslate) {
+    translationInput = structuredClone(body);
+    preTranslateRtkStats = compressMessages(translationInput, true);
+  }
 
   let translatedBody;
   let toolNameMap;
@@ -164,7 +213,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   } else {
     // 0.5.33 — pass cacheControlMode=="always" to skip cache_control mutations
     // on the translated Claude-shape request as well as the passthrough path.
-    translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool, cacheControlMode === "always");
+    translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, translationInput, stream, requestCredentials, provider, reqLogger, stripList, connectionId, clientTool, cacheControlMode === "always");
     if (!translatedBody) {
       trackPendingRequest(model, provider, connectionId, false, true);
       return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`);
@@ -175,9 +224,16 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (translatedBody.stream === undefined) translatedBody.stream = stream;
   }
 
-  // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude clients only).
-  if (clientTool === "claude" && !isClaudeDirectCachePath && Array.isArray(translatedBody.tools)) {
-    const { tools: deduped, stripped } = dedupeTools(translatedBody.tools);
+  // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude
+  // clients, never on the cache-preserving path). 0.5.165 — also drop later
+  // same-name tools for DeepSeek models, which 400 on duplicate names everywhere;
+  // that pass runs on the cache path too, since the request fails without it
+  // (upstream 7f5bd155).
+  if (Array.isArray(translatedBody.tools)) {
+    const { tools: deduped, stripped } = dedupeTools(translatedBody.tools, {
+      clientTool: isClaudeDirectCachePath ? null : clientTool,
+      model: upstreamModel,
+    });
     if (stripped.length > 0) {
       translatedBody.tools = deduped;
       log?.debug?.("TOOLDEDUP", `stripped ${stripped.length}: ${stripped.slice(0, 3).join(", ")}${stripped.length > 3 ? "..." : ""}`);
@@ -210,16 +266,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     delete translatedBody.tools;
   }
 
-  // Anthropic requires an explicit `type` on every tool; strict gateways fronting it
-  // answer 400 for a legacy payload that omits one.
-  if (finalFormat === FORMATS.CLAUDE && Array.isArray(translatedBody.tools)) {
+  // MiniMax answers 400 (error 2013) for a Claude tool without a `type`.
+  // 0.5.165 — scoped to the providers that need it: DeepSeek /anthropic and other
+  // strict anthropic-compatible gateways reject type "custom" (upstream 998bb3d9).
+  if (shouldDefaultClaudeToolType(provider, finalFormat, translatedBody.tools)) {
     translatedBody.tools = defaultClaudeToolType(translatedBody.tools);
   }
 
-  // 0.5.104 (upstream c9926897) — per-request opt-out. A client can send
-  // `X-9Router-Token-Saver: off` to bypass ALL token savers (RTK, Caveman,
-  // Ponytail) for one request without touching the global dashboard toggles.
-  const tokenSaverEnabled = clientRawRequest?.headers?.[TOKEN_SAVER_HEADER]?.toLowerCase() !== "off";
   // Threaded into the streaming/non-streaming request-detail logs so the UI can
   // show per-request PXPIPE savings. Null when PXPIPE didn't run or didn't apply.
   let pxpipeSummary = null;
@@ -231,8 +284,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       log?.debug?.("CACHE", `mode=${cacheControlMode} | token savers SKIPPED to preserve upstream prompt cache (${clientTool} → ${provider})`);
     }
   } else {
-    // RTK: compress tool_result content
-    const rtkStats = compressMessages(translatedBody, rtkEnabled);
+    // RTK: compress tool_result content (Cursor already ran it before translation)
+    const rtkStats = rtkBeforeTranslate ? preTranslateRtkStats : compressMessages(translatedBody, rtkEnabled);
     const rtkLine = formatRtkLog(rtkStats);
     if (rtkLine) log?.debug?.("RTK", rtkLine);
 
@@ -327,6 +380,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
     connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
     vercelRelayUrl: credentials?.providerSpecificData?.vercelRelayUrl || "",
+    // 0.5.165 — strict pools must never fall back to a direct connection. Without
+    // these two fields the guard in proxyAwareFetch and the Cursor executor never
+    // saw strictProxy on a chat request (upstream cfd8c618).
+    proxyPoolId: credentials?.providerSpecificData?.connectionProxyPoolId || null,
+    strictProxy: credentials?.providerSpecificData?.strictProxy === true,
   };
 
   if (proxyOptions.vercelRelayUrl) {
@@ -437,7 +495,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   try {
-    const result = await executor.execute({ model, body: translatedBody, clientBody: body, stream, credentials, clientTool, signal: streamController.signal, log, proxyOptions });
+    const result = await executor.execute({ model, body: translatedBody, clientBody: body, stream, credentials: requestCredentials, clientTool, signal: streamController.signal, log, proxyOptions });
     providerResponse = result.response;
     providerUrl = result.url;
     providerHeaders = result.headers;
@@ -477,7 +535,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       // the caller's shared credentials object (our concurrency-safety invariant).
       let workingCreds = credentials;
       const newCredentials = await refreshWithRetry(async () => {
-        const result = await executor.refreshCredentials(workingCreds, log);
+        // 0.5.165 — refresh through the request's proxy. Without it the call that
+        // carries the refresh token left over the direct IP, pooled or strict.
+        const result = await executor.refreshCredentials(workingCreds, log, proxyOptions);
         workingCreds = rotateWorkingCreds(workingCreds, result);
         return result;
       }, 3, log);
@@ -485,7 +545,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         log?.info?.("TOKEN", `${provider.toUpperCase()} | refreshed`);
         // Immutable update — never mutate the caller's credentials object.
         // Concurrent requests sharing the same reference must not see each other's tokens.
-        const updatedCredentials = { ...credentials, ...newCredentials };
+        const updatedCredentials = { ...requestCredentials, ...newCredentials };
         if (onCredentialsRefreshed) {
           try { await onCredentialsRefreshed(newCredentials); } catch (e) { log?.warn?.("TOKEN", `onCredentialsRefreshed failed: ${e.message}`); }
         }
@@ -564,7 +624,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // to this account can begin in parallel with the stream the user receives).
   releaseOnce();
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary };
+  // 0.5.165 — whether kRouter cloaked this request, so the decloak fallback cannot
+  // rename a client tool whose own name ends in the cloak suffix. Uses the PROVIDER
+  // credential; sharedCtx.apiKey is kRouter's own client key (usage tracking).
+  const cloakActive = isClaudeCloakingActive(provider, requestCredentials?.accessToken || requestCredentials?.apiKey || null);
+  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, cloakActive, pxpipe: pxpipeSummary };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

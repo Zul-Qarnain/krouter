@@ -2,6 +2,7 @@ import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { CLAUDE_SYSTEM_PROMPT } from "../../config/appConstants.js";
 import { adjustMaxTokens } from "../helpers/maxTokensHelper.js";
+import { ensureTrailingUserTurn, isAlwaysThinkingClaude } from "../helpers/claudeHelper.js";
 
 // Empty prefix matches real Claude Code behavior (no tool name prefix).
 // Previously "proxy_" was used but this is a detectable fingerprint difference.
@@ -86,6 +87,13 @@ export function openaiToClaudeRequest(model, body, stream) {
     }
 
     flushCurrentMessage();
+
+    // 0.5.165 (upstream 75834e96 + 5e9bd464) — a final user message with nothing
+    // Claude accepts (empty string, unsupported parts) is not flushed, so the body
+    // ends on assistant: prefill, which newer models reject. Judge by the role the
+    // client really ended on, so its own assistant prefill is kept.
+    const clientLastRole = nonSystemMessages[nonSystemMessages.length - 1]?.role;
+    result.messages = ensureTrailingUserTurn(result.messages, clientLastRole === "assistant" ? "assistant" : undefined);
 
     // Add cache_control to last assistant message
     for (let i = result.messages.length - 1; i >= 0; i--) {
@@ -175,7 +183,9 @@ Respond ONLY with the JSON object, no other text.`);
     result.thinking = {
       type: body.thinking.type || "enabled",
       ...(body.thinking.budget_tokens && { budget_tokens: body.thinking.budget_tokens }),
-      ...(body.thinking.max_tokens && { max_tokens: body.thinking.max_tokens })
+      ...(body.thinking.max_tokens && { max_tokens: body.thinking.max_tokens }),
+      // 0.5.165 — keep a display the client chose (upstream 90b06934)
+      ...(typeof body.thinking.display === "string" && { display: body.thinking.display })
     };
   }
 
@@ -198,12 +208,65 @@ Respond ONLY with the JSON object, no other text.`);
     }
   }
 
+  applyClaudeThinkingShape(model, body, result);
+
   // Attach toolNameMap to result for response translation
   if (toolNameMap.size > 0) {
     result._toolNameMap = toolNameMap;
   }
 
   return result;
+}
+
+// 0.5.165 — OpenAI reasoning_effort as Claude's effort level. Claude has no
+// "none" for a model that always thinks, and no "minimal": both become "low".
+const CLAUDE_EFFORT_FROM_OPENAI = {
+  none: "low", minimal: "low", low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max",
+};
+
+function budgetToClaudeEffort(budget) {
+  if (!(budget > 0)) return null;
+  if (budget <= 4096) return "low";
+  if (budget <= 8192) return "medium";
+  if (budget <= 16384) return "high";
+  return "xhigh";
+}
+
+function claudeEffortFromRequest(body, thinking) {
+  if (typeof body.reasoning_effort === "string") {
+    return CLAUDE_EFFORT_FROM_OPENAI[body.reasoning_effort.toLowerCase()] || null;
+  }
+  if (thinking?.type === "enabled") return budgetToClaudeEffort(Number(thinking.budget_tokens));
+  return null;
+}
+
+// Chat Completions has no summary knob: a client that sets reasoning_effort is
+// asking for reasoning, and reasoning_content is how it would receive it.
+function wantsReasoningText(body) {
+  if (typeof body.reasoning_effort !== "string") return false;
+  const effort = body.reasoning_effort.toLowerCase();
+  return effort !== "none" && effort !== "off";
+}
+
+// Shape the thinking fields for the Claude model being called.
+// 0.5.165 (upstream ac9120fd) — models that think on every turn (Opus 5.5, Sonnet
+// 5.5, Fable) take output_config.effort; the budget switch is the old shape (Fable
+// answers it with 400). "disabled" is left for prepareClaudeRequest, which rewrites
+// it per model.
+// 0.5.165 (upstream 90b06934) — elsewhere, Claude returns thinking text only with
+// thinking.display "summarized", which OpenAI has no field for. Ask for it when the
+// client asked for reasoning; selectAnthropicBeta then drops redact-thinking.
+function applyClaudeThinkingShape(model, body, result) {
+  if (isAlwaysThinkingClaude(model)) {
+    const effort = claudeEffortFromRequest(body, result.thinking);
+    if (result.thinking?.type !== "disabled") delete result.thinking;
+    if (effort) result.output_config = { effort };
+    return;
+  }
+  const thinking = result.thinking;
+  if (!/claude/i.test(model) || !wantsReasoningText(body)) return;
+  if (!thinking || thinking.type === "disabled" || thinking.display) return;
+  result.thinking = { ...thinking, display: "summarized" };
 }
 
 // Get content blocks from single message

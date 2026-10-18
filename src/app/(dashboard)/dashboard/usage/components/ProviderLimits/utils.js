@@ -243,6 +243,24 @@ export function parseQuotaData(provider, data) {
     return [];
   }
 
+  // 0.5.165 — Claude rows need their own order. The PROVIDER_MODELS sort below
+  // keys on model ids ("claude-opus-5-5"), never on quota row names
+  // ("weekly opus (7d)"), so every Claude row scored 999 and the tracker simply
+  // kept Anthropic's payload order — which moves between polls now that scoped
+  // windows arrive in limits[]. Unknown rows keep their relative position after
+  // the canonical ones (Array#sort is stable). (upstream e214fb1c)
+  if (provider?.toLowerCase() === "claude") {
+    const CLAUDE_QUOTA_ORDER = {
+      "session (5h)": 0,
+      "weekly (7d)": 1,
+      "weekly fable (7d)": 2,
+      "weekly opus (7d)": 3,
+      "weekly sonnet (7d)": 4,
+    };
+    normalizedQuotas.sort((a, b) => (CLAUDE_QUOTA_ORDER[a.name] ?? 99) - (CLAUDE_QUOTA_ORDER[b.name] ?? 99));
+    return normalizedQuotas;
+  }
+
   // Sort quotas according to PROVIDER_MODELS order
   const modelOrder = getModelsByProviderId(provider);
   if (modelOrder.length > 0) {

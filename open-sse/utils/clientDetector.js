@@ -8,7 +8,10 @@ const NATIVE_PAIRS = {
   "claude": ["claude", "anthropic"],
   "gemini-cli": ["gemini-cli"],
   "antigravity": ["antigravity"],
-  "codex": ["codex", "openai", "commandcode"],
+  // 0.5.165 — codex only. Passthrough skips translation, and only the codex
+  // provider takes a Responses body: "openai" posted it to /v1/chat/completions
+  // (needs messages[]) and "commandcode" to /alpha/generate (needs params.messages).
+  "codex": ["codex"],
   // 0.5.74 — REMOVED kiro from native passthrough. When MITM is active, Kiro
   // IDE traffic goes: Kiro IDE → MITM handler (converts AWS format to OpenAI)
   // → k‍Router /v1/chat/completions (OpenAI format). If we passthrough here,

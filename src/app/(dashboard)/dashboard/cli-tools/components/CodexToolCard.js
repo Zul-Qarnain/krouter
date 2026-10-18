@@ -63,18 +63,29 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   }, [codexStatus]);
 
+  // 0.5.165 — read the provider Codex actually uses, which the route parses from
+  // model_provider. The first base_url in the file is often another router's, since
+  // Apply appends the krouter table after it (upstream 8f20daac).
+  const currentBaseUrl = codexStatus?.activeProvider?.baseUrl || "";
+  const fileApiKey = codexStatus?.activeProvider?.apiKey || "";
+
+  // 0.5.165 — preselect the key the active provider sends, but only a dashboard key:
+  // a placeholder or revoked key in the file must not be written back on Apply.
+  useEffect(() => {
+    if (fileApiKey && apiKeys?.some((k) => k.key === fileApiKey)) setSelectedApiKey(fileApiKey);
+  }, [fileApiKey, apiKeys]);
+
   const getConfigStatus = () => {
     if (!codexStatus?.installed) return null;
     if (!codexStatus.config) return "not_configured";
-    const parsed = codexStatus.config.match(/base_url\s*=\s*"([^"]+)"/);
-    const currentUrl = parsed ? parsed[1] : "";
-    return matchKnownEndpoint(currentUrl, { tunnelPublicUrl, tailscaleUrl }) ? "configured" : "other";
+    return matchKnownEndpoint(currentBaseUrl, { tunnelPublicUrl, tailscaleUrl }) ? "configured" : "other";
   };
 
   const configStatus = getConfigStatus();
 
   const getEffectiveBaseUrl = () => {
-    const url = customBaseUrl || `${baseUrl}/v1`;
+    // 0.5.165 — strip a trailing slash first, or ".../v1/" became ".../v1//v1" (upstream 8f20daac).
+    const url = (customBaseUrl || `${baseUrl}/v1`).replace(/\/+$/, "");
     // Ensure URL ends with /v1
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
@@ -84,7 +95,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const checkCodexStatus = async () => {
     setCheckingCodex(true);
     try {
-      const res = await fetch("/api/cli-tools/codex-settings");
+      const res = await fetch("/api/cli-tools/codex-settings", { cache: "no-store" });
       const data = await res.json();
       setCodexStatus(data);
     } catch (error) {
@@ -278,19 +289,15 @@ default_subagent_model = "${effectiveSubagentModel}"
                 </div>
 
                 {/* Current configured */}
-                {codexStatus?.config && (() => {
-                  const parsed = codexStatus.config.match(/base_url\s*=\s*"([^"]+)"/);
-                  const currentBaseUrl = parsed ? parsed[1] : null;
-                  return currentBaseUrl ? (
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
-                      <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Current</span>
-                      <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                      <span className="min-w-0 truncate rounded bg-surface/40 px-2 py-2 text-xs text-text-muted sm:py-1.5">
-                        {currentBaseUrl}
-                      </span>
-                    </div>
-                  ) : null;
-                })()}
+                {currentBaseUrl && (
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
+                    <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Current</span>
+                    <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
+                    <span className="min-w-0 truncate rounded bg-surface/40 px-2 py-2 text-xs text-text-muted sm:py-1.5">
+                      {currentBaseUrl}
+                    </span>
+                  </div>
+                )}
 
                 {/* API Key */}
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">

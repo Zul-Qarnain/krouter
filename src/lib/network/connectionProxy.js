@@ -33,6 +33,12 @@ export function pickProxyPoolId(poolIds, strategy, providerId) {
   return poolIds[0]; // "none" or unknown
 }
 
+// "__none__" means explicitly disabled.
+function normalizeProxyPoolId(providerSpecificData) {
+  const proxyPoolIdRaw = normalizeString(providerSpecificData?.proxyPoolId);
+  return proxyPoolIdRaw === "__none__" ? "" : proxyPoolIdRaw;
+}
+
 /**
  * Normalize legacy proxy configuration.
  */
@@ -67,15 +73,15 @@ export async function resolveConnectionProxyConfig(
   providerSpecificData = {}
 ) {
   try {
-    const proxyPoolIdRaw = normalizeString(
-      providerSpecificData?.proxyPoolId
-    );
-
-    // "__none__" means explicitly disabled
-    const proxyPoolId =
-      proxyPoolIdRaw === "__none__" ? "" : proxyPoolIdRaw;
+    const proxyPoolId = normalizeProxyPoolId(providerSpecificData);
 
     const legacy = normalizeLegacyProxy(providerSpecificData);
+
+    // 0.5.165 — a strict pool keeps its guarantee even when the pool itself is
+    // not usable (inactive, or saved without a url). The legacy/none returns
+    // below used to drop strictProxy, so the request left over the direct IP
+    // (upstream 24664f2c).
+    let poolStrictProxy = false;
 
     /**
      * -----------------------------
@@ -92,6 +98,8 @@ export async function resolveConnectionProxyConfig(
         proxyPool &&
         proxyPool.isActive === true &&
         proxyUrl;
+
+      poolStrictProxy = proxyPool?.strictProxy === true;
 
       if (isValidPool) {
         /**
@@ -148,7 +156,13 @@ export async function resolveConnectionProxyConfig(
         proxyPoolId: proxyPoolId || null,
         proxyPool: null,
 
+        strictProxy: poolStrictProxy,
+
         ...legacy,
+        // 0.5.165 — the legacy noProxy is ignored while the pool works. Under an
+        // unusable strict pool, honouring it would send those hosts direct
+        // exactly when the pool is down, so drop it (kRouter-own).
+        connectionNoProxy: poolStrictProxy ? "" : legacy.connectionNoProxy,
       };
     }
 
@@ -163,7 +177,10 @@ export async function resolveConnectionProxyConfig(
       proxyPoolId: proxyPoolId || null,
       proxyPool: null,
 
+      strictProxy: poolStrictProxy,
+
       ...legacy,
+      connectionNoProxy: poolStrictProxy ? "" : legacy.connectionNoProxy,
     };
   } catch (error) {
     console.error(
@@ -171,17 +188,22 @@ export async function resolveConnectionProxyConfig(
       error
     );
 
+    // 0.5.165 — fail closed. The lookup failed, so whether the pool is strict is
+    // unknown; with a pool assigned, report strict so proxyAwareFetch refuses
+    // instead of sending the request over the direct IP (kRouter-own).
+    const proxyPoolId = normalizeProxyPoolId(providerSpecificData);
+
     return {
       source: "error",
 
-      proxyPoolId: null,
+      proxyPoolId: proxyPoolId || null,
       proxyPool: null,
 
       connectionProxyEnabled: false,
       connectionProxyUrl: "",
       connectionNoProxy: "",
 
-      strictProxy: false,
+      strictProxy: !!proxyPoolId,
     };
   }
 }

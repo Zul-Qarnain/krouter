@@ -73,14 +73,23 @@ const COOLDOWN = {
 /**
  * Unified error classification rules.
  * Checked top-to-bottom: text rules first (by order), then status rules.
- * Each rule: { text?, status?, cooldownMs?, backoff? }
+ * Each rule: { text?, status?, cooldownMs?, backoff?, provider? }
  *   - text: substring match (case-insensitive) on error message
  *   - status: HTTP status code match
  *   - cooldownMs: fixed cooldown duration
  *   - backoff: true = use exponential backoff (rate limit)
+ *   - provider: rule applies only to this provider id (alias resolved by checkFallbackError)
  */
 export const ERROR_RULES = [
   // --- Text-based rules (checked first, order = priority) ---
+  // 0.5.165 — Codex refuses a model the ChatGPT plan cannot use with a 400. That is
+  // about THIS account's plan: hold the model on it and try the next account
+  // (upstream 9f41ee75). The retired gpt-5.4 / Spark ids answer exactly this.
+  { provider: "codex", text: "model is not supported when using codex with a chatgpt account", cooldownMs: MAX_RATE_LIMIT_COOLDOWN_MS },
+  // 0.5.165 — kRouter's own 503 when every concurrency slot on the account is taken
+  // (chatCore "Account <id> busy, try another"). Slots free up in seconds, so the 30s
+  // transient default parked every account of a parallel burst. Short doubling backoff.
+  { text: "busy, try another",                  backoff: true },
   // "Verify your account" = Google anti-abuse 403. PERMANENT ban signal —
   // ported from OmniRoute v3.8.35: this account will NEVER auto-recover.
   // 0.5.46 raises cooldown 1h → 24h so we stop wasting requests retrying every
@@ -90,6 +99,14 @@ export const ERROR_RULES = [
   { text: "this service has been disabled in this account", cooldownMs: 24 * 60 * 60 * 1000, accountLock: true, permanent: true },
   { text: "your account has been suspended", cooldownMs: 24 * 60 * 60 * 1000, accountLock: true, permanent: true },
   { text: "this account is deactivated", cooldownMs: 24 * 60 * 60 * 1000, accountLock: true, permanent: true },
+  // 0.5.165 — 400s that are about the credential, not the request. Unmatched 4xx
+  // are now request-scoped (no lock, no failover), so name these to keep failing
+  // over to the next key: Anthropic's empty credit balance, Gemini's bad key and
+  // region block (the region depends on the connection's proxy).
+  { text: "credit balance is too low",          cooldownMs: COOLDOWN.long },
+  { text: "api key not valid",                  cooldownMs: COOLDOWN.long },
+  { text: "api_key_invalid",                    cooldownMs: COOLDOWN.long },
+  { text: "user location is not supported",     cooldownMs: COOLDOWN.long },
   { text: "no credentials",            cooldownMs: COOLDOWN.long },
   { text: "request not allowed",       cooldownMs: COOLDOWN.short },
   { text: "improperly formed request", cooldownMs: COOLDOWN.long },

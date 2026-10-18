@@ -26,6 +26,8 @@
 //   - Claude messages format: content[].type === "image" → removed
 //   - OpenAI chat format: content[].type === "image_url" → removed
 //   - Gemini contents format: parts[].inlineData / parts[].fileData → removed
+//   - Message-level msg.images[] and image attachments (Ollama/Hermes,
+//     Vercel AI SDK) → removed (0.5.165)
 //   - If a message becomes empty after stripping, it's replaced with a tiny
 //     marker so the upstream doesn't 400 on empty content.
 
@@ -115,8 +117,41 @@ function stripGeminiContents(contents) {
   });
 }
 
+const OMITTED_MARKER = "[image omitted: model does not support vision]";
+
+function isImageAttachment(att) {
+  if (!att || typeof att !== "object") return false;
+  const mime = att.contentType || att.mediaType;
+  if (typeof mime === "string" && mime.startsWith("image/")) return true;
+  return typeof att.url === "string" && att.url.startsWith("data:image/");
+}
+
+// 0.5.165 — Ollama/Hermes `images[]` and Vercel-AI-SDK image attachments ride
+// beside content, so filtering content blocks alone still sent the image to a
+// text-only model (upstream 345cdcf6, strip half). Returns a new message, or the
+// same one when there is nothing to drop.
+function stripSideImages(msg) {
+  let out = msg;
+  if (Array.isArray(msg.images)) {
+    const { images: _dropped, ...rest } = msg;
+    out = rest;
+  }
+  for (const field of ["experimental_attachments", "attachments"]) {
+    if (!Array.isArray(out[field])) continue;
+    const kept = out[field].filter(a => !isImageAttachment(a));
+    if (kept.length !== out[field].length) out = { ...out, [field]: kept };
+  }
+  if (out === msg) return msg;
+  // Don't leave an image-only turn with empty content — upstreams 400 on that.
+  if (out.content === undefined || out.content === null || out.content === "") {
+    return { ...out, content: OMITTED_MARKER };
+  }
+  return out;
+}
+
 function stripMessages(messages) {
-  return messages.map(msg => {
+  return messages.map(original => {
+    const msg = original && typeof original === "object" ? stripSideImages(original) : original;
     if (!msg || msg.content === undefined || msg.content === null) return msg;
     // String content is already text-only — keep as-is.
     if (typeof msg.content === "string") return msg;
@@ -133,7 +168,7 @@ function stripMessages(messages) {
         return true;
       });
       if (filtered.length === 0) {
-        return { ...msg, content: "[image omitted: model does not support vision]" };
+        return { ...msg, content: OMITTED_MARKER };
       }
       // If only one text block remains, simplify to string for older parsers.
       if (filtered.length === 1 && filtered[0].type === "text") {

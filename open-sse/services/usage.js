@@ -409,15 +409,46 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
     if (data.models) {
       // Filter only recommended/important models (must match PROVIDER_MODELS ag ids)
       const importantModels = [
+        // 0.5.165 — Gemini 4 Argon. Upstream's own quota list omits it even
+        // though its registry routes the model, which is the same drift that
+        // lost gemini-3.1-flash-image below. kRouter charts every ag catalog id
+        // instead; the entry is inert until Google reports the bucket.
+        // (upstream 29fc880e)
+        'gemini-4-argon-high',
+        // 0.5.165 — Gemini Flash tiers Google serves today. Without these the
+        // quota bars simply did not render. (upstream 70f15aa5, 86694ed8, 42c691b3)
+        'gemini-3.8-flash-high',
+        'gemini-3.8-flash-medium',
+        'gemini-3.8-flash-low',
+        'gemini-3.7-flash-high',
+        'gemini-3.7-flash-medium',
+        'gemini-3.7-flash-low',
+        'gemini-3.6-flash-high',
+        'gemini-3.6-flash-medium',
+        'gemini-3.6-flash-low',
         'gemini-3-flash-agent',
         'gemini-3.5-flash-low',
         'gemini-3.5-flash-extra-low',
+        // 0.5.165 — gemini-3.1-pro-high (upstream 24034f69)
+        'gemini-3.1-pro-high',
         'gemini-pro-agent',
         'gemini-3.1-pro-low',
+        // 0.5.165 — Claude 5.5 tiers on Antigravity (upstream a07ed95b)
+        'claude-sonnet-5-5-high',
+        'claude-sonnet-5-5-medium',
+        'claude-sonnet-5-5-low',
+        'claude-sonnet-5-5',
+        'claude-opus-5-5-high',
+        'claude-opus-5-5-medium',
+        'claude-opus-5-5-low',
+        'claude-opus-5-5',
         'claude-sonnet-4-6',
         'claude-opus-4-6-thinking',
         'gpt-oss-120b-medium',
         'gemini-3-flash',
+        // 0.5.165 — in the ag catalog since 0.5.107 but never added here, so
+        // its quota bar never rendered. (upstream 5306bd90)
+        'gemini-3.1-flash-image',
       ];
 
       for (const [modelKey, info] of Object.entries(data.models)) {
@@ -631,6 +662,25 @@ async function _getClaudeUsage(accessToken, proxyOptions = null) {
         if (key.startsWith("seven_day_") && key !== "seven_day" && hasUtilization(value)) {
           const modelName = key.replace("seven_day_", "");
           quotas[`weekly ${modelName} (7d)`] = createQuotaObject(value);
+        }
+      }
+
+      // 0.5.165 — model-scoped weekly limits (Fable, and whatever Anthropic
+      // scopes next) arrive in limits[], not as a seven_day_* key:
+      //   { kind: "weekly_scoped", percent, resets_at,
+      //     scope: { model: { display_name: "Fable" } } }
+      // No limits entry means the account has no such window, so omit the row
+      // rather than fabricating one — upstream's first attempt showed every
+      // account a 100%-available Fable bar and was reverted. (upstream 4ad1e7a4)
+      if (Array.isArray(data.limits)) {
+        for (const limit of data.limits) {
+          if (limit?.kind !== "weekly_scoped") continue;
+          const modelName = String(limit?.scope?.model?.display_name || "").trim().toLowerCase();
+          if (!modelName || typeof limit.percent !== "number") continue;
+          quotas[`weekly ${modelName} (7d)`] = createQuotaObject({
+            utilization: Math.max(0, Math.min(100, limit.percent)),
+            resets_at: limit.resets_at,
+          });
         }
       }
 

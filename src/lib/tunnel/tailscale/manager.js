@@ -6,6 +6,10 @@ import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/ma
 
 initDbHooks(getSettings, updateSettings);
 
+// 0.5.165 — the enable flow's health wait is non-fatal (the watchdog re-verifies),
+// so cap it at 20 s instead of the 180 s HEALTH_CHECK.timeoutMs (upstream e7c269b8).
+const ENABLE_HEALTH_TIMEOUT_MS = 20000;
+
 const svc = {
   cancelToken: { cancelled: false },
   spawnInProgress: false,
@@ -88,7 +92,7 @@ export async function enableTailscale(localPort = 20128) {
     // Verify funnel serves /api/health — timeout is non-fatal (DNS may still be propagating)
     let reachableNow = false;
     try {
-      await waitForHealth(result.tunnelUrl, token);
+      await waitForHealth(result.tunnelUrl, token, { timeoutMs: ENABLE_HEALTH_TIMEOUT_MS });
       reachableNow = true;
     } catch (he) {
       if (!he.message.startsWith("Health check timeout")) throw he;

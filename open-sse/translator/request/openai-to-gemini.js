@@ -16,7 +16,8 @@ import {
   generateRequestId,
   generateSessionId,
   generateProjectId,
-  cleanJSONSchemaForAntigravity
+  cleanJSONSchemaForAntigravity,
+  normalizeGeminiContents
 } from "../helpers/geminiHelper.js";
 import { deriveSessionId } from "../../utils/sessionManager.js";
 
@@ -33,6 +34,37 @@ function sanitizeGeminiFunctionName(name) {
   }
   // Truncate to 64 chars
   return sanitized.substring(0, 64);
+}
+
+// 0.5.165 — Gemini validates functionCall id uniqueness across the WHOLE
+// history and rejects the entire request with 400 INVALID_ARGUMENT when one
+// repeats, but an OpenAI tool_call_id is only unique inside its own assistant
+// turn: a long agent session legitimately replays call_51859 at turn 14 and
+// again at turn 22 (upstream 6e4f82db).
+//
+// Uniqueness is per OCCURRENCE, not per id — two different calls sharing an id
+// must end up with different emitted ids — so the mapping is consumed in
+// document order rather than memoized by id. Each call site calls next() once
+// per emitted functionCall and keeps the result so the matching
+// functionResponse reuses it. Ids that were already unique pass through
+// untouched, leaving a valid conversation byte-identical.
+function createToolCallIdUniquifier() {
+  const used = new Set();
+  return {
+    next(id) {
+      if (!id) return id;
+      if (!used.has(id)) {
+        used.add(id);
+        return id;
+      }
+      let n = 2;
+      let candidate = `${id}-${n}`;
+      // An id may already end in "-2"; keep counting rather than collide again.
+      while (used.has(candidate)) candidate = `${id}-${++n}`;
+      used.add(candidate);
+      return candidate;
+    },
+  };
 }
 
 // Core: Convert OpenAI request to Gemini format (base for all variants)
@@ -72,15 +104,24 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
     }
   }
 
-  // Build tool responses cache
+  // Build tool responses cache.
+  //
+  // 0.5.165 — queued per id rather than a single value: a tool_call_id is only
+  // unique inside its own assistant turn, so a long agent session can reuse one
+  // id for two different tool results. A plain id -> content map keeps only the
+  // LAST one, and the earlier turn would then be answered with the later turn's
+  // output. Each functionCall consumes the oldest unconsumed result for its id
+  // instead (upstream 6e4f82db).
   const toolResponses = {};
   if (body.messages && Array.isArray(body.messages)) {
     for (const msg of body.messages) {
       if (msg.role === "tool" && msg.tool_call_id) {
-        toolResponses[msg.tool_call_id] = msg.content;
+        (toolResponses[msg.tool_call_id] ||= []).push(msg.content);
       }
     }
   }
+  const toolResponseCursor = {};
+  const toolCallIdUniquifier = createToolCallIdUniquifier();
 
   // Convert messages
   if (body.messages && Array.isArray(body.messages)) {
@@ -127,40 +168,60 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
             if (tc.type !== "function") continue;
 
             const args = tryParseJSON(tc.function?.arguments || "{}");
+            const emitId = toolCallIdUniquifier.next(tc.id);
             parts.push({
               thoughtSignature: signature,
               functionCall: {
-                id: tc.id,
+                id: emitId,
                 name: sanitizeGeminiFunctionName(tc.function.name),
                 args: args
               }
             });
-            toolCallIds.push(tc.id);
+            // 0.5.165 — the NAME travels with the pair for the same reason the id
+            // does: tcID2Name is a conversation-wide id -> name map, so a later
+            // call reusing the id would otherwise rename this turn's response.
+            toolCallIds.push({ origId: tc.id, emitId, name: tc.function?.name });
           }
 
           if (parts.length > 0) {
             result.contents.push({ role: "model", parts });
           }
 
-          // Check if there are actual tool responses in the next messages
-          const hasActualResponses = toolCallIds.some(fid => toolResponses[fid]);
+          // Check if there are actual tool responses in the next messages.
+          // 0.5.165 — an intermediate call MUST get a functionResponse even when
+          // its result is missing or the empty string, or Gemini 400s on a call
+          // with no matching response. The old truthiness test treated "" as
+          // missing (upstream e7b5f09d).
+          const isIntermediate = i < body.messages.length - 1;
+          const hasActualResponses = toolCallIds.some(
+            ({ origId }) => (toolResponseCursor[origId] || 0) < (toolResponses[origId]?.length ?? 0)
+          );
 
-          if (hasActualResponses) {
+          if (hasActualResponses || isIntermediate) {
             const toolParts = [];
-            for (const fid of toolCallIds) {
-              if (!toolResponses[fid]) continue;
+            for (const { origId, emitId, name: callName } of toolCallIds) {
+              // Content resolves on the ORIGINAL id, consuming the oldest
+              // unconsumed result; only the emitted id is uniquified.
+              const queue = toolResponses[origId];
+              const cursor = toolResponseCursor[origId] || 0;
+              let resp = "";
+              if (queue && cursor < queue.length) {
+                resp = queue[cursor];
+                toolResponseCursor[origId] = cursor + 1;
+              }
 
-              let name = tcID2Name[fid];
+              // Name comes from THIS call, not from the conversation-wide map,
+              // which a later duplicate of the same id would have overwritten.
+              let name = callName || tcID2Name[origId];
               if (!name) {
-                const idParts = fid.split("-");
+                const idParts = String(origId).split("-");
                 if (idParts.length > 2) {
                   name = idParts.slice(0, -2).join("-");
                 } else {
-                  name = fid;
+                  name = origId;
                 }
               }
 
-              let resp = toolResponses[fid];
               let parsedResp = tryParseJSON(resp);
               if (parsedResp === null) {
                 parsedResp = { result: resp };
@@ -170,7 +231,9 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
 
               toolParts.push({
                 functionResponse: {
-                  id: fid,
+                  // Matches the functionCall id emitted above, so a response
+                  // never points at an id the call does not carry.
+                  id: emitId,
                   name: sanitizeGeminiFunctionName(name),
                   response: { result: parsedResp }
                 }
@@ -217,6 +280,9 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
     }
   }
 
+  // 0.5.165 — merge adjacent same-role turns, drop empty parts, force a leading
+  // user turn and answer a trailing model turn (upstream 8d1db46b).
+  result.contents = normalizeGeminiContents(result.contents);
   return result;
 }
 
@@ -284,10 +350,13 @@ function wrapInCloudCodeEnvelope(model, geminiCLI, credentials = null, isAntigra
     }
   };
 
-  // Antigravity specific fields
+  // Antigravity specific fields.
+  // 0.5.165 — the official Antigravity client omits `requestType` entirely on
+  // the agent (chat) path. Sending `requestType: "agent"` makes Google bucket
+  // the request and answer a detail-free 429 RESOURCE_EXHAUSTED even with quota
+  // available (upstream 5798b308). `image_gen` is a different bucket and keeps
+  // its requestType.
   if (isAntigravity) {
-    envelope.requestType = "agent";
-
     // Inject required default system prompt for Antigravity
     // Inject required default system prompt for Antigravity (double injection)
     const systemParts = [
@@ -324,7 +393,8 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     model: model,
     userAgent: "antigravity",
     requestId: `agent-${generateUUID()}`,
-    requestType: "agent",
+    // 0.5.165 — no `requestType` on the agent (chat) path; see the note in
+    // wrapInCloudCodeEnvelope() above (upstream 5798b308).
     request: {
       sessionId: deriveSessionId(credentials?.email || credentials?.connectionId),
       contents: [],
@@ -442,6 +512,8 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     envelope.request.systemInstruction = { role: "user", parts: systemParts };
   }
 
+  // 0.5.165 — same normalizer as the gemini path (upstream 8d1db46b).
+  envelope.request.contents = normalizeGeminiContents(envelope.request.contents);
   return envelope;
 }
 

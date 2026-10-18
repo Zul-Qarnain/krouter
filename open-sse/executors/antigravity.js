@@ -5,7 +5,7 @@ import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, INTERNAL_REQUEST_HEADER, AG_DEFAU
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { deriveSessionId } from "../utils/sessionManager.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
-import { cleanJSONSchemaForAntigravity } from "../translator/helpers/geminiHelper.js";
+import { cleanJSONSchemaForAntigravity, normalizeGeminiContents } from "../translator/helpers/geminiHelper.js";
 // 0.5.29 — anti-fingerprinting + classification helpers
 import {
   getAntigravitySessionId,
@@ -156,7 +156,7 @@ export class AntigravityExecutor extends BaseExecutor {
     }
 
     // Fix contents for Claude models via Antigravity
-    const contents = body.request?.contents?.map(c => {
+    const rawContents = (body.request?.contents || []).map(c => {
       let role = c.role;
       // functionResponse must be role "user" for Claude models
       if (c.parts?.some(p => p.functionResponse)) {
@@ -168,11 +168,13 @@ export class AntigravityExecutor extends BaseExecutor {
         if (p.thoughtSignature && !p.functionCall && !p.text) return false;
         return true;
       });
-      if (role !== c.role || parts?.length !== c.parts?.length) {
-        return { ...c, role, parts };
-      }
-      return c;
+      return { ...c, role, parts: parts || [] };
     });
+    // 0.5.165 — the role rewrite above creates adjacent same-role turns and the
+    // thought strip can empty a turn's parts; Google answers 400
+    // INVALID_ARGUMENT for both, and for a history that ends on a model turn or
+    // an unanswered functionCall. Normalize AFTER the strip (upstream e7b5f09d).
+    const contents = normalizeGeminiContents(rawContents);
 
     // Sanitize tool schemas and function names before sending to Antigravity.
     let tools = body.request?.tools;
@@ -277,12 +279,19 @@ export class AntigravityExecutor extends BaseExecutor {
     // Matches what the real Antigravity native client picks based on token.
     const envelopeUA = getAntigravityEnvelopeUserAgent(credentials);
 
+    // 0.5.165 — the official Antigravity client omits `requestType` entirely on
+    // the agent (chat) path. Sending `requestType: "agent"` — set here, or leaked
+    // through the ...body spread below from an inbound IDE/MITM envelope — makes
+    // Google bucket the request and answer a detail-free 429 RESOURCE_EXHAUSTED
+    // even with quota available (upstream 5798b308). The `image_gen` bucket is a
+    // different one and keeps its requestType (returned above).
+    delete body.requestType;
+
     return {
       ...body,
       project: projectId,
       model: model,
       userAgent: envelopeUA,
-      requestType: "agent",
       // 0.5.29 — request id format matches native ("agent/<ts>/<8-hex>")
       // instead of UUID. Reduces fingerprint surface.
       requestId: generateAntigravityRequestId(),

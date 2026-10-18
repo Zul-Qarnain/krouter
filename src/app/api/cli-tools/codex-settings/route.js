@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -7,6 +5,11 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
+
+// 0.5.165 — the card refetches this after Apply; it must never be served from a cache.
+// "use server" is gone: a Server Action file may export only async functions, so it
+// could not carry this flag, and a Route Handler runs on the server anyway (upstream 8f20daac).
+export const dynamic = "force-dynamic";
 
 const execAsync = promisify(exec);
 
@@ -83,6 +86,28 @@ const hasKRouterConfig = (config) => {
     || config.includes(`[model_providers.${PROVIDER_KEY}]`);
 };
 
+// 0.5.165 — the provider Codex actually uses: model_provider -> [model_providers.<name>].
+// The card used to take the first base_url in the file, and Apply appends the krouter
+// table after any provider already there, so a working setup showed another router's
+// URL and "Other" (upstream 8f20daac). Parsed here with confbox so inline tables work
+// too. null when no provider is set or the file does not parse.
+const getActiveProvider = (config) => {
+  if (!config) return null;
+  let parsed;
+  try {
+    parsed = parseTOML(config);
+  } catch {
+    return null;
+  }
+  const name = typeof parsed?.model_provider === "string" ? parsed.model_provider : "";
+  if (!name) return null;
+  const table = parsed.model_providers?.[name];
+  const baseUrl = typeof table?.base_url === "string" ? table.base_url : "";
+  const auth = table?.http_headers?.Authorization;
+  const bearer = typeof auth === "string" ? auth.match(/^Bearer\s+(.+)$/i) : null;
+  return { name, baseUrl, apiKey: bearer ? bearer[1].trim() : "" };
+};
+
 // GET - Check codex CLI and read current settings
 export async function GET() {
   try {
@@ -102,6 +127,7 @@ export async function GET() {
       installed: true,
       config,
       hasKRouter: hasKRouterConfig(config),
+      activeProvider: getActiveProvider(config),
       configPath: getCodexConfigPath(),
     });
   } catch (error) {

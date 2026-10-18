@@ -5,16 +5,31 @@ import { buildClineHeaders } from "../../src/shared/utils/clineAuth.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/helpers/paramSupport.js";
+import { applyClaudeModelRules } from "../translator/helpers/claudeHelper.js";
+import { extractClaudeSessionIdFromUserId } from "../utils/claudeCloaking.js";
 
 export class DefaultExecutor extends BaseExecutor {
   constructor(provider) {
     super(provider, PROVIDERS[provider] || PROVIDERS.openai);
   }
 
+  // Claude Messages API targets: claude, anthropic, other claude-format providers,
+  // and anthropic-compatible-* (whose config falls back to the openai entry).
+  isClaudeFormatTarget() {
+    return this.config?.format === "claude" || !!this.provider?.startsWith?.("anthropic-compatible-");
+  }
+
   transformRequest(model, body) {
-    const transformed = this.applyJsonSchemaFallback(body);
+    let transformed = this.applyJsonSchemaFallback(body);
 
     if (transformed && typeof transformed === "object") {
+      // 0.5.165 (upstream 49ba54b2 + a07ed95b) — a native passthrough body (Claude
+      // Code -> claude) never reaches prepareClaudeRequest, and neither does the
+      // provider-level thinking "off" injected on it. This is the last stop before
+      // the wire, so always-thinking Claude models get their rewrite here too.
+      if (this.isClaudeFormatTarget()) {
+        transformed = applyClaudeModelRules(transformed, transformed.model || model);
+      }
       // Gemini's REST generateContent schema gets the model from the URL and
       // does not accept OpenAI's top-level `model` or `stream` fields. The
       // router adds both fields for other providers before dispatching.
@@ -89,7 +104,9 @@ export class DefaultExecutor extends BaseExecutor {
     }
   }
 
-  buildHeaders(credentials, stream = true, url = null, model = null) {
+  // 0.5.165 — `body` is the request about to be sent (BaseExecutor.execute passes it,
+  // upstream f4f06f29); headers derived from it are per request, never cached.
+  buildHeaders(credentials, stream = true, url = null, model = null, body = null) {
     const headers = { "Content-Type": "application/json", ...this.config.headers };
 
     switch (this.provider) {
@@ -105,10 +122,17 @@ export class DefaultExecutor extends BaseExecutor {
         // CLI fingerprint (config.headers = CLAUDE_CLI_SPOOF_HEADERS) and compute
         // anthropic-beta per-request from the model so heavy-agent flags only ship
         // for opus/sonnet.
-        if (model) headers["Anthropic-Beta"] = selectAnthropicBeta(model);
+        if (model) headers["Anthropic-Beta"] = selectAnthropicBeta(model, body);
         credentials.apiKey
           ? (headers["x-api-key"] = credentials.apiKey)
           : (headers["Authorization"] = `Bearer ${credentials.accessToken}`);
+        // 0.5.165 (upstream 6aea3875) — real Claude Code sends x-claude-code-session-id
+        // equal to metadata.user_id's session_id. Derived from THIS request's body, so
+        // no client's identity carries over to another (the 0.5.123 leak stays fixed).
+        if ((credentials.accessToken || credentials.apiKey || "").includes("sk-ant-oat")) {
+          const sessionId = extractClaudeSessionIdFromUserId(body?.metadata?.user_id);
+          if (sessionId) headers["x-claude-code-session-id"] = sessionId;
+        }
         break;
       }
       case "glm":
@@ -140,7 +164,7 @@ export class DefaultExecutor extends BaseExecutor {
           // are untouched. The strip block below still trims claude-code-20250219 for
           // a non-official upstream.
           if (typeof model === "string" && /^claude-/.test(model)) {
-            headers["Anthropic-Beta"] = selectAnthropicBeta(model);
+            headers["Anthropic-Beta"] = selectAnthropicBeta(model, body);
           }
         } else if (this.provider === "gitlab") {
           // GitLab Duo uses Bearer token (PAT with ai_features scope, or OAuth access token)

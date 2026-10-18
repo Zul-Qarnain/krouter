@@ -13,6 +13,12 @@ import {
   resolveDefaultProfileArn
 } from "../../config/kiroConstants.js";
 
+// 0.5.165 — Kiro rejects an empty user turn, so a turn that only carries tool
+// results needs placeholder text. "continue" reads like a new instruction:
+// models answer the word itself and drop the task in progress (upstream 82b1bca4).
+const KIRO_TOOL_RESULTS_PLACEHOLDER = "Tool results provided.";
+const KIRO_EMPTY_USER_PLACEHOLDER = "continue";
+
 // 0.5.74 — Sanitize tool IDs to match Anthropic's pattern ^[a-zA-Z0-9_-]+$
 // Kiro routes through Claude backends which enforce this regex. IDs from
 // other providers (Gemini dots/colons, OpenAI slashes) crash with
@@ -204,7 +210,8 @@ function convertMessages(messages, tools, model) {
 
   const flushPending = () => {
     if (currentRole === "user") {
-      const content = pendingUserContent.join("\n\n").trim() || "continue";
+      const content = pendingUserContent.join("\n\n").trim() ||
+        (pendingToolResults.length > 0 ? KIRO_TOOL_RESULTS_PLACEHOLDER : KIRO_EMPTY_USER_PLACEHOLDER);
       const userMsg = {
         userInputMessage: {
           content: content,

@@ -534,6 +534,12 @@ export class GrokCliExecutor extends BaseExecutor {
     }
 
     // Drop Chat Completions leftovers that Responses rejects
+    // 0.5.165 — max_output_tokens is on the allowlist: map the Chat-style cap into it
+    // instead of silently dropping the client's limit (plan p2-openai-wire, upstream ab044e6d).
+    if (body.max_output_tokens === undefined) {
+      const cap = [body.max_completion_tokens, body.max_tokens].find((v) => Number.isFinite(v) && v > 0);
+      if (cap !== undefined) body.max_output_tokens = cap;
+    }
     delete body.messages;
     delete body.max_tokens;
     delete body.max_completion_tokens;

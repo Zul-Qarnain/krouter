@@ -4,7 +4,7 @@ import { testProxyUrl } from "@/lib/network/proxyTest";
 import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider } from "@/shared/constants/providers";
 import { PROVIDER_ENDPOINTS } from "@/shared/constants/config";
 import { getDefaultModel } from "open-sse/config/providerModels.js";
-import { resolveOllamaLocalHost } from "open-sse/config/providers.js";
+import { resolveOllamaLocalHost, CODEX_CLI_VERSION } from "open-sse/config/providers.js";
 import {
   refreshProviderCredentials,
   shouldRefreshCredentials,
@@ -29,9 +29,12 @@ const OAUTH_TEST_CONFIG = {
     method: "POST",
     authHeader: "Authorization",
     authPrefix: "Bearer ",
-    extraHeaders: { "Content-Type": "application/json", "originator": "codex_cli_rs", "User-Agent": "codex_cli_rs/0.136.0" },
+    // 0.5.165 — one shared CLI version instead of a private 0.136.0 copy, and the
+    // probe model comes from the catalog so it cannot outlive a retirement
+    // (upstream a7047a07, ca6e8407).
+    extraHeaders: { "Content-Type": "application/json", "originator": "codex_cli_rs", "User-Agent": `codex_cli_rs/${CODEX_CLI_VERSION}` },
     // Minimal invalid body — triggers fast 400 without consuming quota
-    body: JSON.stringify({ model: "gpt-5.3-codex", input: [], stream: false, store: false }),
+    body: JSON.stringify({ model: getDefaultModel("cx") || "gpt-5.3-codex", input: [], stream: false, store: false }),
     // 400 (bad request) means auth succeeded; only 401/403 means token is bad
     acceptStatuses: [400],
     refreshable: true,

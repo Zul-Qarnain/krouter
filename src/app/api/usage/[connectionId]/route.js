@@ -3,6 +3,7 @@ import "open-sse/index.js";
 
 import { getProviderConnectionById, updateProviderConnection } from "@/lib/localDb";
 import { getUsageForProvider } from "open-sse/services/usage.js";
+import { isUnrecoverableRefreshError } from "open-sse/services/tokenRefresh.js";
 import { getExecutor } from "open-sse/executors/index.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { USAGE_APIKEY_PROVIDERS } from "@/shared/constants/providers";
@@ -16,12 +17,23 @@ function isAuthExpiredMessage(usage) {
   return AUTH_EXPIRED_PATTERNS.some((p) => msg.includes(p));
 }
 
+// 0.5.165 — set on the error thrown when the provider rejects the refresh token
+// for good, so background callers (token warmer) can stop retrying it.
+export const REFRESH_UNRECOVERABLE_CODE = "REFRESH_TOKEN_UNRECOVERABLE";
+
 /**
  * Refresh credentials using executor and update database
  * @param {boolean} force - Skip needsRefresh check and always attempt refresh
  * @returns Promise<{ connection, refreshed: boolean }>
  */
 export async function refreshAndUpdateCredentials(connection, force = false, proxyOptions = null) {
+  // 0.5.165 — the usage poll, quota auto-ping and token warmer each pass their
+  // own snapshot. OpenAI rotates the Codex refresh token on every refresh and
+  // revokes the session when a rotated one is reused, so work from the row as
+  // stored right now, never the caller's copy (upstream 0bc7f86e).
+  const stored = connection?.id ? await getProviderConnectionById(connection.id) : null;
+  if (stored) connection = stored;
+
   const executor = getExecutor(connection.provider);
 
   // Build credentials object from connection
@@ -47,6 +59,14 @@ export async function refreshAndUpdateCredentials(connection, force = false, pro
 
   // Use executor's refreshCredentials method (with optional proxy)
   const refreshResult = await executor.refreshCredentials(credentials, console, proxyOptions);
+
+  // 0.5.165 — a reused/revoked refresh token used to fall through as
+  // "refreshed" with the dead token; stop here and ask for re-auth (upstream 0bc7f86e).
+  if (isUnrecoverableRefreshError(refreshResult)) {
+    const error = new Error("Refresh token invalid or already used. Please re-authorize the connection.");
+    error.code = REFRESH_UNRECOVERABLE_CODE;
+    throw error;
+  }
 
   if (!refreshResult) {
     // Refresh failed but we still have an accessToken — try with existing token

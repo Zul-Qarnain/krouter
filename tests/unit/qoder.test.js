@@ -401,7 +401,7 @@ describe("wrapQoderSSE", () => {
   it("forwards an OpenAI envelope chunk and emits [DONE] in flush", async () => {
     const inner = JSON.stringify({ choices: [{ delta: { content: "hi" } }] });
     const upstream = `data: ${JSON.stringify({ statusCodeValue: 200, body: inner })}\n\n`;
-    const wrapped = wrapQoderSSE(makeResponse([upstream]), "qoder/auto");
+    const wrapped = await wrapQoderSSE(makeResponse([upstream]), "qoder/auto");
     const out = await drain(wrapped);
     expect(out).toContain(`data: ${inner}\n\n`);
     expect(out).toContain("data: [DONE]\n\n");
@@ -413,7 +413,7 @@ describe("wrapQoderSSE", () => {
     const inner = JSON.stringify({ choices: [{ delta: { content: "tail" } }], finish_reason: "stop" });
     // Note: NO trailing \n on the final line.
     const upstream = `data: ${JSON.stringify({ statusCodeValue: 200, body: inner })}`;
-    const wrapped = wrapQoderSSE(makeResponse([upstream]), "qoder/auto");
+    const wrapped = await wrapQoderSSE(makeResponse([upstream]), "qoder/auto");
     const out = await drain(wrapped);
     expect(out).toContain(`data: ${inner}\n\n`);
   });
@@ -421,13 +421,16 @@ describe("wrapQoderSSE", () => {
   // Regression for review finding #3: chunks could leak past [DONE] when
   // the success branch had no doneEmitted guard. We synthesize an error
   // envelope (which sets doneEmitted=true) followed by a valid envelope
-  // and assert the second envelope is NOT forwarded.
+  // and assert the second envelope is NOT forwarded. 0.5.165 — the error
+  // envelope now has to follow a content frame, because a first-frame error
+  // becomes an HTTP failure instead (upstream 782c137b).
   it("does not forward chunks after [DONE] has been emitted", async () => {
+    const firstEnv = JSON.stringify({ statusCodeValue: 200, body: JSON.stringify({ choices: [{ delta: { content: "hi" } }] }) });
     const errorEnv = JSON.stringify({ statusCodeValue: 500, body: "boom" });
     const validInner = JSON.stringify({ choices: [{ delta: { content: "leak" } }] });
     const validEnv = JSON.stringify({ statusCodeValue: 200, body: validInner });
-    const wrapped = wrapQoderSSE(
-      makeResponse([`data: ${errorEnv}\n\ndata: ${validEnv}\n\n`]),
+    const wrapped = await wrapQoderSSE(
+      makeResponse([`data: ${firstEnv}\n\ndata: ${errorEnv}\n\ndata: ${validEnv}\n\n`]),
       "qoder/auto",
     );
     const out = await drain(wrapped);
@@ -443,7 +446,7 @@ describe("wrapQoderSSE", () => {
   it("strips embedded newlines from inner body before forwarding", async () => {
     const innerWithNewlines = '{"choices":[{"delta":{"content":"a\nb"}}]}';
     const env = JSON.stringify({ statusCodeValue: 200, body: innerWithNewlines });
-    const wrapped = wrapQoderSSE(makeResponse([`data: ${env}\n\n`]), "qoder/auto");
+    const wrapped = await wrapQoderSSE(makeResponse([`data: ${env}\n\n`]), "qoder/auto");
     const out = await drain(wrapped);
     // The forwarded data: line should be a single event terminated by \n\n
     // and contain no internal \n other than the trailing pair.
@@ -453,17 +456,19 @@ describe("wrapQoderSSE", () => {
     expect(() => JSON.parse(dataLine.slice("data: ".length))).not.toThrow();
   });
 
-  it("upstream error envelope produces an error chunk + [DONE]", async () => {
+  // 0.5.165 — a first-frame error envelope is an HTTP failure now, so chatCore
+  // can lock the connection and fall back instead of recording the error text
+  // as a finished completion (upstream 782c137b).
+  it("upstream first-frame error envelope produces an HTTP error", async () => {
     const env = JSON.stringify({ statusCodeValue: 503, body: "service unavailable" });
-    const wrapped = wrapQoderSSE(makeResponse([`data: ${env}\n\n`]), "qoder/lite");
-    const out = await drain(wrapped);
-    expect(out).toContain("[qoder error 503");
-    expect(out).toContain("data: [DONE]\n\n");
+    const wrapped = await wrapQoderSSE(makeResponse([`data: ${env}\n\n`]), "qoder/lite");
+    expect(wrapped.status).toBe(503);
+    expect(await wrapped.json()).toEqual({ error: { message: "service unavailable", code: 503 } });
   });
 
-  it("non-ok responses are returned unchanged (no transform)", () => {
+  it("non-ok responses are returned unchanged (no transform)", async () => {
     const r = new Response("not ok", { status: 500 });
-    const wrapped = wrapQoderSSE(r, "qoder/auto");
+    const wrapped = await wrapQoderSSE(r, "qoder/auto");
     expect(wrapped).toBe(r);
   });
 });

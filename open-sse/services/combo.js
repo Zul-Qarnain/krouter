@@ -13,6 +13,7 @@ import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { bestScoreForProviderModel } from "./quotaPreflight.js";
 import { parseModel } from "./model.js";
 import { getNextFamilyFallback, isModelUnavailableError } from "./modelFamilyFallback.js";
+import { detectEmptyCompletion, readCompletionShape } from "../utils/emptyCompletion.js";
 
 // Quota-aware combo ordering (0.5.27).
 // Sort combo entries so the model with the highest remaining quota across
@@ -267,24 +268,91 @@ export function detectRequiredCapabilities(body) {
  * the request now hits the vision model first instead of silently dropping
  * the image at the text-only model.
  */
-export function reorderByCapabilities(models, required) {
-  if (!required || required.size === 0 || !Array.isArray(models) || models.length <= 1) return models;
+// Returns m => 0 (supports every required hard cap) | 1, or null when no hard cap is required.
+function capabilityTierOf(required) {
+  if (!required || required.size === 0) return null;
   const hard = [...required].filter((c) => HARD_CAPS.has(c));
-  if (hard.length === 0) return models;
-
-  const tierOf = (m) => {
+  if (hard.length === 0) return null;
+  return (m) => {
     const slash = typeof m === "string" ? m.indexOf("/") : -1;
     const provider = slash > 0 ? m.slice(0, slash) : "";
     const model = slash > 0 ? m.slice(slash + 1) : m;
     const caps = getCapabilitiesForModel(provider, model);
     return hard.every((c) => caps[c] === true) ? 0 : 1;
   };
+}
+
+export function reorderByCapabilities(models, required) {
+  if (!Array.isArray(models) || models.length <= 1) return models;
+  const tierOf = capabilityTierOf(required);
+  if (!tierOf) return models;
 
   // Stable sort by tier (Array.prototype.sort is stable in modern V8).
   return models
     .map((m, i) => ({ m, i, t: tierOf(m) }))
     .sort((a, b) => a.t - b.t || a.i - b.i)
     .map((x) => x.m);
+}
+
+// 0.5.165 — quota order may never cross the capability split. reorderByQuota over
+// the whole list let a text-only member with quota data jump ahead of the member
+// that can read the request's image (no quota data sorts last), so the image was
+// stripped. Sort each tier on its own and keep capable members first.
+function reorderByQuotaWithinCapability(models, required) {
+  const tierOf = capabilityTierOf(required);
+  if (!tierOf) return reorderByQuota(models);
+  const capable = models.filter((m) => tierOf(m) === 0);
+  const rest = models.filter((m) => tierOf(m) !== 0);
+  return [...reorderByQuota(capable), ...reorderByQuota(rest)];
+}
+
+/**
+ * 0.5.165 (upstream 8f4e3800) — true when a 2xx completion carries nothing usable:
+ * no text, tool calls or reasoning, and no real finish (missing / in_progress /
+ * incomplete). A real finish such as "length" or "stop" is the model's answer,
+ * however empty. Only chat-completion and Claude message shapes are judged;
+ * anything else (Responses objects, junk) is left alone.
+ */
+const ZERO_CONTENT_FINISH = new Set(["in_progress", "incomplete"]);
+
+function hasReasoning(json) {
+  const msg = json.choices?.[0]?.message || json.choices?.[0]?.delta;
+  const r = msg?.reasoning_content ?? msg?.reasoning;
+  if (typeof r === "string" && r.trim()) return true;
+  return Array.isArray(json.content)
+    && json.content.some((b) => b && (b.type === "thinking" || b.type === "redacted_thinking"));
+}
+
+export function isZeroContentResponse(json) {
+  if (!json || typeof json !== "object") return false;
+  if (!Array.isArray(json.choices) && !Array.isArray(json.content)) return false;
+  if (hasReasoning(json)) return false;
+  const shape = readCompletionShape(json);
+  if (shape.finishReason && !ZERO_CONTENT_FINISH.has(String(shape.finishReason))) return false;
+  return detectEmptyCompletion(shape) !== null;
+}
+
+// Peek a 2xx Response without consuming it. Streams and non-JSON are never judged.
+async function isZeroContentResult(result) {
+  const contentType = result.headers?.get?.("content-type") || "";
+  if (!contentType.includes("application/json")) return false;
+  try {
+    return isZeroContentResponse(await result.clone().json());
+  } catch {
+    return false;
+  }
+}
+
+// 0.5.165 — Retry-After header (seconds or HTTP-date) as an ISO time, or null.
+// The "all accounts parked" response puts the wait only there, not in the body.
+function retryAfterFromHeader(headers) {
+  const raw = headers?.get?.("retry-after");
+  if (!raw) return null;
+  const value = String(raw).trim();
+  const ms = /^\d+(\.\d+)?$/.test(value)
+    ? Date.now() + Number(value) * 1000
+    : Date.parse(value);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true }) {
@@ -294,23 +362,21 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   // Capacity auto-switch: float models that satisfy required input modalities
   // (vision/pdf) to the front so an image request doesn't get silently
   // stripped at a text-only model.
-  if (autoSwitch) {
-    const required = detectRequiredCapabilities(body);
-    if (required.size > 0) {
-      const reordered = reorderByCapabilities(rotatedModels, required);
-      if (reordered[0] !== rotatedModels[0]) {
-        log?.info?.("COMBO", `Capacity auto-switch: ${[...required].join(",")} → reordered to ${reordered[0]} first`);
-      }
-      rotatedModels = reordered;
+  const required = autoSwitch ? detectRequiredCapabilities(body) : new Set();
+  if (required.size > 0) {
+    const reordered = reorderByCapabilities(rotatedModels, required);
+    if (reordered[0] !== rotatedModels[0]) {
+      log?.info?.("COMBO", `Capacity auto-switch: ${[...required].join(",")} → reordered to ${reordered[0]} first`);
     }
+    rotatedModels = reordered;
   }
 
   // Quota-aware ordering (0.5.27): float entries whose provider has the most
-  // remaining quota for that model to the front. Capability sort still wins
-  // when both apply because we run AFTER it — quota reorder only swaps within
-  // the capability-compatible group.
+  // remaining quota for that model to the front. 0.5.165 — only within the
+  // capability-compatible group and within the rest, so it never undoes the
+  // capability sort above.
   if (autoSwitch) {
-    const reorderedByQuota = reorderByQuota(rotatedModels);
+    const reorderedByQuota = reorderByQuotaWithinCapability(rotatedModels, required);
     if (reorderedByQuota[0] !== rotatedModels[0]) {
       log?.info?.("COMBO", `Quota auto-switch: ${reorderedByQuota[0]} has most remaining quota → tried first`);
     }
@@ -339,9 +405,16 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
 
     try {
       const result = await handleSingleModel(body, modelStr);
-      
+
       // Success (2xx) - return response
       if (result.ok) {
+        // 0.5.165 (upstream 8f4e3800) — a non-final seat that answered 200 with
+        // nothing usable falls through: a later member may answer for real. Only
+        // non-streaming JSON is peeked; the final seat is always returned as-is.
+        if (i < rotatedModels.length - 1 && await isZeroContentResult(result)) {
+          log.warn("COMBO", `Model ${modelStr} returned HTTP 200 with zero usable content, trying next`);
+          break; // exit family-fallback inner loop, advance to next combo entry
+        }
         log.info("COMBO", `Model ${modelStr} succeeded`);
         return result;
       }
@@ -356,6 +429,9 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       } catch {
         // Ignore JSON parse errors
       }
+      // 0.5.165 — the "all accounts parked" response carries the wait only as a
+      // Retry-After header, so a combo of parked members lost it. Body still wins.
+      if (!retryAfter) retryAfter = retryAfterFromHeader(result.headers);
 
       // Track earliest retryAfter across all combo models
       if (retryAfter && (!earliestRetryAfter || new Date(retryAfter) < new Date(earliestRetryAfter))) {
@@ -368,7 +444,7 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       }
 
       // Check if should fallback to next model
-      const { shouldFallback, cooldownMs } = checkFallbackError(result.status, errorText);
+      const { shouldFallback, cooldownMs, requestScoped } = checkFallbackError(result.status, errorText, 0, parseModel(modelStr).provider);
 
       // Combo override: "model not found" 404 means THIS specific model is gone
       // upstream — but the NEXT combo entry is a DIFFERENT model that might exist.
@@ -391,7 +467,10 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
         }
       }
 
-      if (!shouldFallback && !isModelNotFound) {
+      // 0.5.165 — a request-scoped 4xx (upstream 20a43f5a) stops ACCOUNT failover
+      // only; the next combo member is a different model that may accept the
+      // request, so the combo still advances (as it did before that change).
+      if (!shouldFallback && !isModelNotFound && !requestScoped) {
         log.warn("COMBO", `Model ${modelStr} failed (no fallback)`, { status: result.status });
         return result;
       }

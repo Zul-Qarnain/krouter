@@ -1,5 +1,6 @@
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
+import { isDeadPoolModel } from "open-sse/services/capacityAdapter.js";
 
 const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
 
@@ -17,9 +18,9 @@ const DEFAULT_SETTINGS = {
   comboStickyRoundRobinLimit: 1,
   comboStrategies: {},
   // 0.5.125 (upstream 8e59093d, adapted) — capacity-adapter fallback pools per
-  // input modality. Only `vision` is enabled by default because our free default
-  // fallback (mmf/mimo-auto) is vision-capable; audio/pdf/video pools are opt-in so
-  // an enabled pool always has a model that can actually satisfy it.
+  // input modality. Only `vision` is enabled by default; audio/pdf/video are opt-in.
+  // 0.5.165 — the vision pool no longer implies mmf/mimo-auto (Xiaomi ended the
+  // free MiMo channel, upstream 6d96e24b): it does nothing until a model is picked.
   capacityAdapter: {
     vision: { enabled: true, roundRobin: false, models: [] },
     pdf: { enabled: false, roundRobin: false, models: [] },
@@ -110,7 +111,31 @@ function mergeWithDefaults(raw) {
       }
     }
   }
+  merged.capacityAdapter = migrateCapacityAdapter(merged.capacityAdapter);
   return merged;
+}
+
+// 0.5.165 — drop stored mmf/* pool entries (dead free MiMo channel, upstream
+// 6d96e24b). Copy-on-write: returns the same object when nothing changes.
+function migrateCapacityAdapter(adapter) {
+  if (!adapter || typeof adapter !== "object" || Array.isArray(adapter)) return adapter;
+  let changed = false;
+  const next = {};
+  for (const [cap, entry] of Object.entries(adapter)) {
+    const list = Array.isArray(entry) ? entry : entry?.models;
+    if (!Array.isArray(list)) {
+      next[cap] = entry;
+      continue;
+    }
+    const kept = list.filter((e) => !isDeadPoolModel(e?.model || e));
+    if (kept.length === list.length) {
+      next[cap] = entry;
+      continue;
+    }
+    changed = true;
+    next[cap] = Array.isArray(entry) ? kept : { ...entry, models: kept };
+  }
+  return changed ? next : adapter;
 }
 
 export async function getSettings() {

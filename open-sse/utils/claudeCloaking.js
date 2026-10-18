@@ -1,28 +1,54 @@
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { CLAUDE_TOOL_SUFFIX, CC_DEFAULT_TOOLS } from "../config/appConstants.js";
+import { CLAUDE_CLI_VERSION } from "../config/providers.js";
 
-// Anthropic gates newly released models on the Claude Code version a client reports:
-// anything below ~2.1.251 gets HTTP 400 for them. This is a live functional break when
-// it goes stale, not cosmetic — the spoof has to keep up. (upstream 009cac63)
-const CLAUDE_VERSION = "2.1.258";
+// Anthropic gates newly released models on the Claude Code version a client reports
+// (Opus 5.5 needs 2.1.280+). A stale spoof is a live 400, not cosmetic. 0.5.165 — the
+// version now comes from CLAUDE_CLI_VERSION so it always matches the User-Agent
+// (upstream 009cac63, 84035760).
 const CC_ENTRYPOINT = "sdk-cli";
 
-// Generate billing header matching real Claude Code 2.1.258+ format:
+// Generate billing header matching the current Claude Code format:
 // x-anthropic-billing-header: cc_version=<ver>.<build>; cc_entrypoint=sdk-cli; cch=<hash>;
 function generateBillingHeader(payload) {
   const content = JSON.stringify(payload);
   const cch = createHash("sha256").update(content).digest("hex").slice(0, 5);
   const buildHash = randomBytes(2).toString("hex").slice(0, 3);
-  return `x-anthropic-billing-header: cc_version=${CLAUDE_VERSION}.${buildHash}; cc_entrypoint=${CC_ENTRYPOINT}; cch=${cch};`;
+  return `x-anthropic-billing-header: cc_version=${CLAUDE_CLI_VERSION}.${buildHash}; cc_entrypoint=${CC_ENTRYPOINT}; cch=${cch};`;
 }
 
-// Generate fake user ID in Claude Code 2.1.258+ JSON format:
+const CLAUDE_SESSION_PREFIX = /^claude:/i;
+
+// Generate fake user ID in the current Claude Code JSON format:
 // {"device_id":"<64hex>","account_uuid":"<uuid>","session_id":"<uuid>"}
 function generateFakeUserID(sessionId) {
   const deviceId = randomBytes(32).toString("hex");
   const accountUuid = randomUUID();
-  const sessionUuid = sessionId || randomUUID();
+  // 0.5.165 — a "claude:"-scoped id is not a Claude Code session id (upstream 6aea3875).
+  const cleanSessionId = typeof sessionId === "string" ? sessionId.replace(CLAUDE_SESSION_PREFIX, "").trim() : null;
+  const sessionUuid = cleanSessionId || randomUUID();
   return `{"device_id":"${deviceId}","account_uuid":"${accountUuid}","session_id":"${sessionUuid}"}`;
+}
+
+/**
+ * 0.5.165 (upstream 6aea3875) — the session id a Claude Code request carries in
+ * metadata.user_id: the JSON form's session_id, or the legacy plain string. Real
+ * Claude Code sends the same value as x-claude-code-session-id.
+ * @param {unknown} userId - body.metadata.user_id
+ * @returns {string|null}
+ */
+export function extractClaudeSessionIdFromUserId(userId) {
+  if (typeof userId !== "string" || !userId) return null;
+  if (userId[0] === "{") {
+    try {
+      const sid = JSON.parse(userId)?.session_id;
+      if (typeof sid !== "string") return null;
+      return sid.replace(CLAUDE_SESSION_PREFIX, "").trim() || null;
+    } catch {
+      return null;
+    }
+  }
+  return userId.replace(CLAUDE_SESSION_PREFIX, "").trim() || null;
 }
 
 /**
@@ -82,14 +108,42 @@ export function cloakClaudeTools(body) {
   };
 }
 
+// 0.5.165 (upstream b65d2d0a) — last-resort decloak when a name is not in the map
+// (the map is lost across a retried or reconnected stream): strip the literal
+// suffix. CC decoy names are sent unsuffixed and stay as they are, so the client
+// still sees "tool unavailable" for them.
+function stripCloakSuffix(name) {
+  if (typeof name !== "string" || !name.endsWith(CLAUDE_TOOL_SUFFIX)) return null;
+  if (CC_DEFAULT_TOOLS.has(name)) return null;
+  const original = name.slice(0, -CLAUDE_TOOL_SUFFIX.length);
+  return original || null;
+}
+
+/**
+ * 0.5.165 — did kRouter cloak this request? Mirrors the gate in translator/index.js:
+ * only provider "claude" with an OAuth token is cloaked. The suffix ("_ide") is short
+ * enough to end a client's own tool name, so the last-resort strip below must never
+ * run on a request kRouter did not cloak.
+ * @param {string|null} provider
+ * @param {string|null} providerKey - the PROVIDER credential (OAuth token or API key),
+ *   never kRouter's own client key.
+ * @returns {boolean}
+ */
+export function isClaudeCloakingActive(provider, providerKey) {
+  return provider === "claude" && typeof providerKey === "string" && providerKey.includes("sk-ant-oat");
+}
+
+function resolveCloakedName(name, toolNameMap, cloakActive) {
+  return toolNameMap?.get?.(name) || (cloakActive ? stripCloakSuffix(name) : null);
+}
+
 // Decloak tool_use names in non-streaming Claude response body (INPUT side)
-export function decloakToolNames(body, toolNameMap) {
-  if (!toolNameMap?.size || !Array.isArray(body?.content)) return body;
+export function decloakToolNames(body, toolNameMap, cloakActive = false) {
+  if (!Array.isArray(body?.content)) return body;
   const content = body.content.map(block => {
-    if (block?.type === "tool_use" && toolNameMap.has(block.name)) {
-      return { ...block, name: toolNameMap.get(block.name) };
-    }
-    return block;
+    if (block?.type !== "tool_use") return block;
+    const original = resolveCloakedName(block.name, toolNameMap, cloakActive);
+    return original ? { ...block, name: original } : block;
   });
   return { ...body, content };
 }
@@ -138,19 +192,21 @@ const CC_DECOY_TOOLS = [
  * name appears exactly once per call — on the content_block_start event of
  * a tool_use block; argument deltas carry no name.
  *
- * Unknown names (e.g. a CC decoy tool the model called anyway) pass through
- * unchanged, matching the non-streaming decloak behavior.
+ * A suffixed name missing from the map (map lost across a retry/reconnect)
+ * falls back to stripping CLAUDE_TOOL_SUFFIX, matching the non-streaming decloak -
+ * but only when cloakActive says kRouter cloaked this request, so a client tool whose
+ * own name ends in the suffix is never renamed. Decoys and anything else pass through.
  *
  * @param {object|null} chunk - Parsed SSE event (may be null on stream flush)
  * @param {Map|null} toolNameMap - Suffixed → original name map from cloakClaudeTools()
  * @returns {object|null} The chunk, with the tool_use name restored when cloaked
  */
-export function decloakStreamChunk(chunk, toolNameMap) {
-  if (!toolNameMap?.size || !chunk || typeof chunk !== "object") return chunk;
+export function decloakStreamChunk(chunk, toolNameMap, cloakActive = false) {
+  if (!chunk || typeof chunk !== "object") return chunk;
   if (chunk.type !== "content_block_start") return chunk;
   const block = chunk.content_block;
   if (block?.type !== "tool_use" || typeof block.name !== "string") return chunk;
-  const original = toolNameMap.get(block.name);
+  const original = resolveCloakedName(block.name, toolNameMap, cloakActive);
   if (!original) return chunk;
   return { ...chunk, content_block: { ...block, name: original } };
 }

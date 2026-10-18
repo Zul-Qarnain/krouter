@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { Badge, Toggle, Tooltip } from "@/shared/components";
 import CooldownTimer from "./CooldownTimer";
+import { getLatestModelLockUntil } from "open-sse/services/accountFallback.js";
 
 export default function ConnectionRow({ connection, proxyPools, health = null, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete, oneByOneStatus = null, autoPing = null }) {
   const [showProxyDropdown, setShowProxyDropdown] = useState(false);
@@ -76,31 +77,28 @@ export default function ConnectionRow({ connection, proxyPools, health = null, i
     : (connection.name || connection.email || connection.displayName || "API Key");
 
   // Use useState + useEffect for impure Date.now() to avoid calling during render
-  const [isCooldown, setIsCooldown] = useState(false);
+  // 0.5.165 — count down to the LATEST lock still running. The earliest raw value
+  // could be an expired key (only a success clears those), which hid an active
+  // month-long account hold's countdown.
+  const [cooldownUntil, setCooldownUntil] = useState(null);
+  const isCooldown = !!cooldownUntil;
 
-  // Get earliest model lock timestamp (useEffect handles the Date.now() comparison)
-  const modelLockUntil = Object.entries(connection)
-    .filter(([k]) => k.startsWith("modelLock_"))
-    .map(([, v]) => v)
-    .filter(v => !!v)
-    .sort()[0] || null;
+  // Changes whenever a lock is set or cleared; no Date.now() during render.
+  const modelLockSignature = Object.entries(connection)
+    .filter(([k, v]) => k.startsWith("modelLock_") && v)
+    .map(([k, v]) => `${k}=${v}`)
+    .sort()
+    .join("|");
 
   useEffect(() => {
-    const checkCooldown = () => {
-      const until = Object.entries(connection)
-        .filter(([k]) => k.startsWith("modelLock_"))
-        .map(([, v]) => v)
-        .filter(v => v && new Date(v).getTime() > Date.now())
-        .sort()[0] || null;
-      setIsCooldown(!!until);
-    };
+    const checkCooldown = () => setCooldownUntil(getLatestModelLockUntil(connection));
 
     checkCooldown();
-    const interval = modelLockUntil ? setInterval(checkCooldown, 1000) : null;
+    const interval = modelLockSignature ? setInterval(checkCooldown, 1000) : null;
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [modelLockUntil]);
+  }, [modelLockSignature]);
 
   // Determine effective status (override unavailable if cooldown expired)
   const effectiveStatus = (connection.testStatus === "unavailable" && !isCooldown)
@@ -199,7 +197,7 @@ export default function ConnectionRow({ connection, proxyPools, health = null, i
                 Proxy
               </Badge>
             )}
-            {isCooldown && connection.isActive !== false && <CooldownTimer until={modelLockUntil} />}
+            {isCooldown && connection.isActive !== false && <CooldownTimer until={cooldownUntil} />}
             {/* 0.5.100 — Only show the red error text when the connection is
                 actually in an error state. If the last-error timestamp is
                 stale (cooldown expired OR effectiveStatus recovered to active),

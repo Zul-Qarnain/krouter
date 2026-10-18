@@ -8,43 +8,52 @@
  * front only when none of the original models can handle the request — so this
  * never overrides a combo that already has a member covering the capability.
  *
- * 0.5.125 (upstream 8e59093d) adapted for kRouter: the default fallback model is our
- * free MiMo channel `mmf/mimo-auto` (upstream shipped the OpenCode-free
- * `oc/mimo-v2.5-free`, which our fork doesn't run). mmf/mimo-auto is vision-capable,
- * which is why only the vision pool is enabled by default (see settingsRepo) — audio/
- * pdf/video pools exist but are opt-in so an "enabled" pool always has a model that
- * can actually satisfy it.
+ * 0.5.125 (upstream 8e59093d) adapted for kRouter. Only the vision pool is enabled
+ * by default (see settingsRepo); audio/pdf/video pools are opt-in.
+ *
+ * 0.5.165 — no implicit default model (upstream 6d96e24b hid mimo-free: Xiaomi
+ * ended the free MiMo channel). The old default mmf/mimo-auto now fails every
+ * call, so an enabled pool with no models is a no-op until the user picks one,
+ * and stored mmf/* entries are dropped. The next default (upstream 6886915f,
+ * oc/mimo-v2.6-flash-free) waits for the OpenCode Free revival.
  */
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 
 const CAPABILITY_KEYS = ["vision", "pdf", "audioInput", "videoInput"];
 const HARD_CAPS = new Set(CAPABILITY_KEYS);
-const DEFAULT_FALLBACK_MODEL = "mmf/mimo-auto";
+// 0.5.165 — pool entries on a dead channel (upstream 6d96e24b). Matches both the
+// alias form the dashboard stores and the full provider id.
+const DEAD_POOL_PROVIDERS = ["mmf/", "mimo-free/"];
+
+export function isDeadPoolModel(model) {
+  return typeof model === "string" && DEAD_POOL_PROVIDERS.some((p) => model.startsWith(p));
+}
+
+// Copy of a pool list without empty and dead entries.
+function dropDeadPoolModels(models) {
+  return models.filter((m) => m && !isDeadPoolModel(m));
+}
 
 // Normalize a capability entry to { enabled, roundRobin, models }. Backward-compat:
 // accept the legacy array form [{model, enabled}] (treated as enabled, fallback).
 function normalizeCapEntry(entry) {
   if (Array.isArray(entry)) {
-    return { enabled: true, roundRobin: false, models: entry.map((e) => e?.model || e).filter(Boolean) };
+    return { enabled: true, roundRobin: false, models: dropDeadPoolModels(entry.map((e) => e?.model || e)) };
   }
   if (entry && typeof entry === "object") {
     return {
       enabled: entry.enabled !== false,
       roundRobin: !!entry.roundRobin,
-      models: Array.isArray(entry.models) ? entry.models.filter(Boolean) : [],
+      models: Array.isArray(entry.models) ? dropDeadPoolModels(entry.models) : [],
     };
   }
   return { enabled: false, roundRobin: false, models: [] };
 }
 
-// Resolve one capability's full config. Enabled pools with no models fall back
-// to DEFAULT_FALLBACK_MODEL so the toggle is never a no-op.
+// Resolve one capability's full config. 0.5.165 — an enabled pool with no models
+// stays empty (no implicit default), so it adds nothing to the request.
 export function getCapacityAdapterConfig(cap, settings) {
-  const entry = normalizeCapEntry(settings?.capacityAdapter?.[cap]);
-  if (entry.enabled && entry.models.length === 0) {
-    return { ...entry, models: [DEFAULT_FALLBACK_MODEL] };
-  }
-  return entry;
+  return normalizeCapEntry(settings?.capacityAdapter?.[cap]);
 }
 
 // Flatten enabled models across all capability pools, in priority order, deduped.

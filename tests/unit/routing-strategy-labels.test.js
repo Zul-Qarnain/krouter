@@ -128,7 +128,8 @@ describe("the combo help text does not promise a fixed first model", () => {
   it("the quota and attachment exception is shown with Combo Round Robin on as well", () => {
     // handleComboChat reorders after getRotatedModels, whatever the combo strategy.
     const combo = read("open-sse/services/combo.js");
-    expect(combo).toMatch(/getRotatedModels\([\s\S]*reorderByCapabilities\([\s\S]*reorderByQuota\(rotatedModels\)/);
+    // 0.5.165 — the quota sort now runs inside each capability group.
+    expect(combo).toMatch(/getRotatedModels\([\s\S]*reorderByCapabilities\([\s\S]*reorderByQuotaWithinCapability\(rotatedModels, required\)/);
     expect(routingSection()).toContain('{", unless another has more quota left or is needed for an attachment (image, PDF, audio, video)."}');
   });
 });

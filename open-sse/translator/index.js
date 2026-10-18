@@ -174,7 +174,7 @@ export function translateResponse(targetFormat, sourceFormat, chunk, state) {
   // ("_ide"-suffixed) name reached the client and every tool call was rejected as
   // unknown. state.toolNameMap is populated at open-sse/utils/stream.js:57.
   if (sourceFormat === targetFormat) {
-    return [decloakStreamChunk(chunk, state?.toolNameMap)];
+    return [decloakStreamChunk(chunk, state?.toolNameMap, state?.cloakActive === true)];
   }
 
   let results = [chunk];

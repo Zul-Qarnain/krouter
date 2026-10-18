@@ -15,13 +15,14 @@ const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
 // 0.5.126 (upstream 8e59093d, adapted) — Capacity adapter: global fallback pools of
 // models per input-modality capability. A request needing a capability the target
 // model/combo lacks switches to the first enabled model here instead of dropping the
-// media. Default fallback adapted to our free vision-capable mmf/mimo-auto.
+// media.
+// 0.5.165 — no default model: the old mmf/mimo-auto default is a dead channel
+// (upstream 6d96e24b), so an empty pool does nothing and says so.
 const CAPACITY_ADAPTER_CAPS = [
-  { key: "vision", label: "Vision", icon: "visibility", desc: "Images" },
-  { key: "audioInput", label: "Audio", icon: "graphic_eq", desc: "Audio input" },
+  { key: "vision", label: "Vision", icon: "visibility", desc: "Images", emptyHint: "Pick a vision model. Image requests are not rerouted until you add one." },
+  { key: "audioInput", label: "Audio", icon: "graphic_eq", desc: "Audio input", emptyHint: "Pick an audio model. Audio requests are not rerouted until you add one." },
   // pdf/videoInput hidden — no translator support yet for those blocks.
 ];
-const DEFAULT_FALLBACK_MODEL = "mmf/mimo-auto";
 const EMPTY_CAP_ENTRY = { enabled: true, roundRobin: false, models: [] };
 const EMPTY_CAPACITY_ADAPTER = {
   vision: { ...EMPTY_CAP_ENTRY },
@@ -438,9 +439,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders }) {
   };
 
   const handleRemove = (index) => {
-    const next = models.filter((_, i) => i !== index);
-    // Auto-refill with the default fallback so an enabled pool is never empty.
-    patch({ models: next.length === 0 ? [DEFAULT_FALLBACK_MODEL] : next });
+    patch({ models: models.filter((_, i) => i !== index) });
   };
 
   const handleMove = (index, delta) => {
@@ -470,7 +469,9 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders }) {
               <span className="text-[10px] text-text-muted">— {cap.desc}</span>
             </div>
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-              {models.length === 0 ? (
+              {models.length === 0 && enabled ? (
+                <span className="text-xs text-amber-600 dark:text-amber-400">{cap.emptyHint}</span>
+              ) : models.length === 0 ? (
                 <span className="text-xs text-text-muted italic">No models</span>
               ) : (
                 models.slice(0, 3).map((model, index) => (

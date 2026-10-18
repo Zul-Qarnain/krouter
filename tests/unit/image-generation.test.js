@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleImageGenerationCore } from "../../open-sse/handlers/imageGenerationCore.js";
+import { CODEX_CLI_VERSION } from "../../open-sse/config/providers.js";
 
 const originalFetch = global.fetch;
 
@@ -316,7 +317,10 @@ describe("handleImageGenerationCore", () => {
     expect(responseBody.data[0].b64_json).toBeTruthy();
   });
 
-  it("generates image with Codex gpt-5.5-image using current Codex version header", async () => {
+  // 0.5.165 — gpt-5.5 is retired from ChatGPT sign-in, so the suffixed id this
+  // covers moved to gpt-5.6-sol-image, and the version header now comes from the
+  // one shared CODEX_CLI_VERSION instead of a private 0.136.0 copy.
+  it("generates image with Codex gpt-5.6-sol-image using current Codex version header", async () => {
     global.fetch.mockResolvedValueOnce(
       new Response(
         [
@@ -335,7 +339,7 @@ describe("handleImageGenerationCore", () => {
         size: "1024x1024",
         output_format: "png",
       },
-      modelInfo: { provider: "codex", model: "gpt-5.5-image" },
+      modelInfo: { provider: "codex", model: "gpt-5.6-sol-image" },
       credentials: {
         accessToken: "codex-token",
         providerSpecificData: { chatgptAccountId: "account-123" },
@@ -351,14 +355,14 @@ describe("handleImageGenerationCore", () => {
         headers: expect.objectContaining({
           authorization: "Bearer codex-token",
           "chatgpt-account-id": "account-123",
-          version: "0.136.0",
+          version: CODEX_CLI_VERSION,
         }),
       })
     );
 
     const fetchCall = global.fetch.mock.calls[0];
     const requestBody = JSON.parse(fetchCall[1].body);
-    expect(requestBody.model).toBe("gpt-5.5");
+    expect(requestBody.model).toBe("gpt-5.6-sol");
     expect(requestBody.tools).toEqual([
       { type: "image_generation", output_format: "png", size: "1024x1024" },
     ]);

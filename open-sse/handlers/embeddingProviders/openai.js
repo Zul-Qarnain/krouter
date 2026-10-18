@@ -9,7 +9,10 @@ const ENDPOINTS = {
   fireworks: "https://api.fireworks.ai/inference/v1/embeddings",
   together: "https://api.together.xyz/v1/embeddings",
   nebius: "https://api.tokenfactory.nebius.com/v1/embeddings",
-  github: "https://models.github.ai/inference/embeddings",
+  // 0.5.165 — models.github.ai/inference was retired 2026-07-30 and now answers
+  // every POST with `200 text/plain "OK"`; the live route is the Copilot one.
+  // Headers come from ./github.js, which wraps this adapter. (upstream 51a1827e)
+  github: "https://api.githubcopilot.com/embeddings",
   nvidia: "https://integrate.api.nvidia.com/v1/embeddings",
   "jina-ai": "https://api.jina.ai/v1/embeddings",
   "vercel-ai-gateway": "https://ai-gateway.vercel.sh/v1/embeddings",

@@ -9,7 +9,7 @@ import {
 import { buildCursorHeaders } from "../utils/cursorChecksum.js";
 import { estimateUsage } from "../utils/usageTracking.js";
 import { FORMATS } from "../translator/formats.js";
-import { proxyAwareFetch } from "../utils/proxyFetch.js";
+import { proxyAwareFetch, isStrictProxyIntended } from "../utils/proxyFetch.js";
 import zlib from "zlib";
 
 // Detect cloud environment
@@ -231,7 +231,12 @@ export class CursorExecutor extends BaseExecutor {
     const transformedBody = this.transformRequest(model, body, stream, credentials);
 
     try {
-      const shouldForceFetch = proxyOptions?.enabled === true || proxyOptions?.connectionProxyEnabled === true || !!proxyOptions?.vercelRelayUrl;
+      // 0.5.165 — the HTTP/2 path below opens a direct socket and cannot carry a
+      // proxy. A strict proxy that was intended but resolved to nothing must go
+      // through proxyAwareFetch, which refuses instead of leaking the real IP
+      // (kRouter-own; the case upstream cfd8c618 guards).
+      const shouldForceFetch = proxyOptions?.enabled === true || proxyOptions?.connectionProxyEnabled === true
+        || !!proxyOptions?.vercelRelayUrl || isStrictProxyIntended(proxyOptions);
       const response = (http2 && !shouldForceFetch)
         ? await this.makeHttp2Request(url, headers, transformedBody, signal)
         : await this.makeFetchRequest(url, headers, transformedBody, signal, proxyOptions);

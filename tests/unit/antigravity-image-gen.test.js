@@ -132,13 +132,16 @@ describe("Antigravity executor — image model handling", () => {
     expect(out.request.contents[0].parts).toEqual([{ text: "keep me" }]);
   });
 
-  it("normal chat models still use the agent envelope (no regression)", () => {
+  it("normal chat models still use the chat envelope (no regression)", () => {
     const out = ex().transformRequest(
       "gemini-3-flash-agent",
       { request: { contents: [{ role: "user", parts: [{ text: "hi" }] }] } },
       false, creds,
     );
-    expect(out.requestType).toBe("agent");
+    // 0.5.165 — the chat path no longer carries requestType at all; sending
+    // "agent" drew a fake 429 RESOURCE_EXHAUSTED (upstream 5798b308). Only the
+    // image path keeps one. See antigravity-no-agent-request-type.test.js.
+    expect(out.requestType).toBeUndefined();
     expect(out.request.generationConfig.imageConfig).toBeUndefined();
   });
 });

@@ -221,12 +221,15 @@ export function extractUsage(chunk) {
   }
 
   // Ollama NDJSON format (raw from provider, before translation)
-  // Ollama sends: {"model":"...","done":true,"prompt_eval_count":N,"eval_count":M}
+  // Ollama sends: {"model":"...","done":true,"prompt_eval_count":N,"eval_count":M,"prompt_eval_cached_count":C}
+  // 0.5.165 — prompt_eval_cached_count is a cache-read subset of prompt_eval_count
+  // (cache-INCLUSIVE); dropping it billed cached prompts at the full rate (upstream 46627249).
   if (chunk.done === true && typeof chunk.prompt_eval_count === "number") {
     return normalizeUsage({
       prompt_tokens: chunk.prompt_eval_count || 0,
       completion_tokens: chunk.eval_count || 0,
-      total_tokens: (chunk.prompt_eval_count || 0) + (chunk.eval_count || 0)
+      total_tokens: (chunk.prompt_eval_count || 0) + (chunk.eval_count || 0),
+      cached_tokens: chunk.prompt_eval_cached_count || 0
     });
   }
 

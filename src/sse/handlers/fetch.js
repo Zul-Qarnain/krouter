@@ -161,13 +161,20 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
   let lastError = null;
   let lastStatus = null;
 
+  // 0.5.165 — scope this handler's locks, as search.js does. Tavily and Exa serve
+  // search and fetch from one connection; without a key markAccountUnavailable
+  // writes modelLock___all and one failed fetch blocks search (and chat) on that
+  // account. Read and cleared under the same key it is written with (upstream e0ffc7e2).
+  const fetchLockKey = `webfetch:${providerId}`;
+
   while (true) {
-    const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
+    const credentials = await getProviderCredentials(providerId, excludeConnectionIds, fetchLockKey);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
+        // 0.5.165 — every account is parked: 503 + Retry-After, never a stale 401/400 (upstream 15687d19).
+        const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("FETCH", `[${providerId}] ${errorMsg} (${credentials.retryAfterHuman})`);
         return unavailableResponse(status, `[${providerId}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
       }
@@ -200,7 +207,7 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
         });
       },
       onRequestSuccess: async () => {
-        await clearAccountError(credentials.connectionId, credentials);
+        await clearAccountError(credentials.connectionId, credentials, fetchLockKey);
       }
     });
 
@@ -210,7 +217,7 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
       });
     }
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, providerId);
+    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, providerId, fetchLockKey);
 
     if (shouldFallback) {
       log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);

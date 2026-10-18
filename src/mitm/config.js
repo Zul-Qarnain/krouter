@@ -58,12 +58,17 @@ function isChatRequest(tool, req) {
 }
 
 // Synonym map: rawModel from request → canonical alias key in mitmAlias DB
+// 0.5.165 — repointed at the 3.8 ladder (upstream 24034f69). Google retired the
+// 3.5 Flash tiers and gemini-3-flash-agent, but IDE builds in the field still send
+// those ids, so the keys stay and the targets move to live models.
 const MODEL_SYNONYMS = {
   antigravity: {
-    "gemini-default": "gemini-3.5-flash-low",
-    "gemini-3.5-flash-high": "gemini-3-flash-agent",
-    "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
-    "gemini-3.5-flash-extra-low": "gemini-3.5-flash-extra-low",
+    "gemini-default": "gemini-3.8-flash-medium",
+    "gemini-3.5-flash-high": "gemini-3.8-flash-high",
+    "gemini-3.5-flash-medium": "gemini-3.8-flash-medium",
+    "gemini-3.5-flash-low": "gemini-3.8-flash-low",
+    "gemini-3.5-flash-extra-low": "gemini-3.8-flash-low",
+    "gemini-3.8-flash": "gemini-3.8-flash-medium",
     "gemini-3.1-pro-high": "gemini-pro-agent",
     "gemini-3-pro-high": "gemini-pro-agent",
     "gemini-3-pro-low": "gemini-3.1-pro-low",
@@ -74,11 +79,21 @@ const MODEL_SYNONYMS = {
 // Order matters: more specific patterns first. Catches AG renamed variants (e.g. gemini-pro-agent)
 const MODEL_PATTERNS = {
   antigravity: [
-    { match: /flash.*extra.*low|extra.*low.*flash|flash.*low|low.*flash/i, alias: "gemini-3.5-flash-extra-low" },
-    { match: /flash.*medium|medium.*flash/i,                       alias: "gemini-3.5-flash-low" },
-    { match: /flash.*agent|agent.*flash|flash/i,                   alias: "gemini-3-flash-agent" },
+    { match: /flash.*extra.*low|extra.*low.*flash|flash.*low|low.*flash/i, alias: "gemini-3.8-flash-low" },
+    { match: /flash.*medium|medium.*flash/i,                       alias: "gemini-3.8-flash-medium" },
+    { match: /flash.*agent|agent.*flash|flash/i,                   alias: "gemini-3.8-flash-high" },
     { match: /pro.*low|low.*pro/i,                                 alias: "gemini-3.1-pro-low" },
     { match: /gemini.*pro|pro.*gemini/i,                           alias: "gemini-pro-agent" },
+    // 0.5.165 — 5.5 before the 4.6 catch-alls, so an IDE asking for Opus 5.5 does
+    // not silently land on Opus 4.6 (upstream 24034f69, a07ed95b).
+    { match: /opus.*5[.-]5.*high|5[.-]5.*opus.*high/i,             alias: "claude-opus-5-5-high" },
+    { match: /opus.*5[.-]5.*medium|5[.-]5.*opus.*medium/i,         alias: "claude-opus-5-5-medium" },
+    { match: /opus.*5[.-]5.*low|5[.-]5.*opus.*low/i,               alias: "claude-opus-5-5-low" },
+    { match: /opus.*5[.-]5|5[.-]5.*opus/i,                         alias: "claude-opus-5-5" },
+    { match: /sonnet.*5[.-]5.*high|5[.-]5.*sonnet.*high/i,         alias: "claude-sonnet-5-5-high" },
+    { match: /sonnet.*5[.-]5.*medium|5[.-]5.*sonnet.*medium/i,     alias: "claude-sonnet-5-5-medium" },
+    { match: /sonnet.*5[.-]5.*low|5[.-]5.*sonnet.*low/i,           alias: "claude-sonnet-5-5-low" },
+    { match: /sonnet.*5[.-]5|5[.-]5.*sonnet/i,                     alias: "claude-sonnet-5-5" },
     { match: /opus/i,                                              alias: "claude-opus-4-6-thinking" },
     { match: /sonnet|claude/i,                                     alias: "claude-sonnet-4-6" },
     { match: /gpt.*oss|oss/i,                                      alias: "gpt-oss-120b-medium" },

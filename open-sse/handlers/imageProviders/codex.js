@@ -1,13 +1,28 @@
 // Codex (ChatGPT Plus/Pro) image generation via Responses API + SSE
 import { randomUUID } from "node:crypto";
 import { nowSec } from "./_base.js";
+import { CODEX_CLI_VERSION } from "../../config/providers.js";
+import { getProviderModels } from "../../config/providerModels.js";
 
 const CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
-const CODEX_USER_AGENT = "codex_cli_rs/0.136.0";
-const CODEX_VERSION = "0.136.0";
+// 0.5.165 — these two were pinned at 0.136.0 of their own accord while the chat
+// transport moved on; one constant now feeds every Codex identity header
+// (upstream a7047a07, ca6e8407).
+const CODEX_USER_AGENT = `codex_cli_rs/${CODEX_CLI_VERSION}`;
 const CODEX_ORIGINATOR = "codex_cli_rs";
 const CODEX_MODEL_SUFFIX = "-image";
 const CODEX_REF_DETAIL = "high";
+// 0.5.165 — the chat model every standalone gpt-image-* request runs on. gpt-5.5,
+// upstream's original choice, was retired from ChatGPT sign-in on 2026-10-14 and
+// now answers 400 (upstream 832a3465, eb712ca8, 7878f53b).
+// tests/unit/codex-image-models-run-on-a-chat-model.test.js fails if the cx
+// catalog ever stops serving it.
+const CODEX_IMAGES_MAIN_MODEL = "gpt-5.6-sol";
+// How a standalone image model is told apart from a "<chat model>-image" id,
+// which keeps running on its own chat model. Membership is read from the catalog
+// (see resolveCodexImageModels) so a new gpt-image release is a one-line change
+// there and nothing to maintain here.
+const CODEX_TOOL_IMAGE_PREFIX = "gpt-image-";
 
 function decodeAccountId(idToken) {
   try {
@@ -24,6 +39,19 @@ function decodeAccountId(idToken) {
 
 function stripImageSuffix(model) {
   return model.endsWith(CODEX_MODEL_SUFFIX) ? model.slice(0, -CODEX_MODEL_SUFFIX.length) : model;
+}
+
+// Which model carries the conversation and which one draws. A standalone
+// gpt-image-* id cannot carry the conversation, so it rides in
+// image_generation.model and a chat model takes its place.
+function resolveCodexImageModels(model) {
+  const isToolImageModel = typeof model === "string"
+    && model.startsWith(CODEX_TOOL_IMAGE_PREFIX)
+    && getProviderModels("cx").some((entry) => entry.id === model && entry.type === "image");
+  if (isToolImageModel) {
+    return { responsesModel: CODEX_IMAGES_MAIN_MODEL, toolModel: model };
+  }
+  return { responsesModel: stripImageSuffix(model), toolModel: null };
 }
 
 function toDataUrl(input) {
@@ -43,7 +71,30 @@ function buildContent(prompt, refs, detail = CODEX_REF_DETAIL) {
   return content;
 }
 
-// Parse Codex SSE stream → final base64 image. Optional callbacks for client streaming.
+// 0.5.165 — the exact usage Codex reports on response.completed, in the shape
+// saveRequestUsage already understands (upstream e10da160). Anything that is not
+// a whole, non-negative token count is dropped rather than recorded as a guess.
+function normalizeResponsesUsage(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const input = raw.input_tokens ?? raw.prompt_tokens;
+  const output = raw.output_tokens ?? raw.completion_tokens;
+  if (!Number.isSafeInteger(input) || input < 0) return null;
+  if (!Number.isSafeInteger(output) || output < 0) return null;
+
+  const usage = {
+    prompt_tokens: input,
+    completion_tokens: output,
+    total_tokens: Number.isSafeInteger(raw.total_tokens) ? raw.total_tokens : input + output,
+  };
+  const cached = raw.input_tokens_details?.cached_tokens ?? raw.prompt_tokens_details?.cached_tokens;
+  const reasoning = raw.output_tokens_details?.reasoning_tokens ?? raw.completion_tokens_details?.reasoning_tokens;
+  if (Number.isSafeInteger(cached) && cached >= 0) usage.cached_tokens = cached;
+  if (Number.isSafeInteger(reasoning) && reasoning >= 0) usage.reasoning_tokens = reasoning;
+  return usage;
+}
+
+// Parse Codex SSE stream → final base64 image + reported usage.
+// Optional callbacks for client streaming.
 async function parseStream(response, log, callbacks = {}) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -52,6 +103,7 @@ async function parseStream(response, log, callbacks = {}) {
   let lastEvent = null;
   let bytesReceived = 0;
   let lastProgressLogMs = 0;
+  let usage = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -101,13 +153,20 @@ async function parseStream(response, log, callbacks = {}) {
           }
         } catch {}
       }
+
+      if ((eventName === "response.completed" || eventName === "response.done") && dataStr) {
+        try {
+          const data = JSON.parse(dataStr);
+          usage = normalizeResponsesUsage(data?.response?.usage ?? data?.usage) || usage;
+        } catch {}
+      }
     }
   }
-  return imageB64;
+  return { imageB64, usage };
 }
 
 // SSE Response that pipes codex progress + partial + done events to client
-function buildSseResponse(providerResponse, log, onSuccess) {
+function buildSseResponse(providerResponse, log, onSuccess, onUsage) {
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -115,13 +174,14 @@ function buildSseResponse(providerResponse, log, onSuccess) {
         controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
       try {
-        const b64 = await parseStream(providerResponse, log, {
+        const { imageB64: b64, usage } = await parseStream(providerResponse, log, {
           onProgress: (info) => send("progress", info),
           onPartialImage: (info) => send("partial_image", info),
         });
         if (!b64) {
           send("error", { message: "Codex did not return an image. Account may not be entitled (Plus/Pro required)." });
         } else {
+          if (usage && onUsage) await onUsage(usage);
           if (onSuccess) await onSuccess();
           send("done", { created: nowSec(), data: [{ b64_json: b64 }] });
         }
@@ -156,7 +216,7 @@ export default {
       "originator": CODEX_ORIGINATOR,
       "session_id": randomUUID(),
       "user-agent": CODEX_USER_AGENT,
-      "version": CODEX_VERSION,
+      "version": CODEX_CLI_VERSION,
       "x-client-request-id": randomUUID(),
     };
   },
@@ -166,32 +226,40 @@ export default {
     const single = toDataUrl(body.image);
     if (single) refs.push(single);
     const detail = body.image_detail || CODEX_REF_DETAIL;
+    const { responsesModel, toolModel } = resolveCodexImageModels(model);
     const imgTool = { type: "image_generation", output_format: (body.output_format || "png").toLowerCase() };
+    if (toolModel) {
+      imgTool.action = refs.length > 0 ? "edit" : "generate";
+      imgTool.model = toolModel;
+    }
     if (body.size && body.size !== "") imgTool.size = body.size;
     if (body.quality && body.quality !== "") imgTool.quality = body.quality;
     if (body.background && body.background !== "") imgTool.background = body.background;
     return {
-      model: stripImageSuffix(model),
+      model: responsesModel,
       instructions: "",
       input: [{ type: "message", role: "user", content: buildContent(body.prompt, refs, detail) }],
       tools: [imgTool],
-      tool_choice: "auto",
+      // A standalone image model must be forced; letting the chat model decide
+      // means it sometimes answers in prose and never calls the tool.
+      tool_choice: toolModel ? { type: "image_generation" } : "auto",
       parallel_tool_calls: false,
       prompt_cache_key: randomUUID(),
       stream: true,
       store: false,
-      reasoning: null,
+      reasoning: toolModel ? { effort: "medium", summary: "auto" } : null,
     };
   },
   // Custom: codex parses SSE → either pipe to client or collect b64
-  async parseResponse(response, { log, streamToClient, onRequestSuccess }) {
+  async parseResponse(response, { log, streamToClient, onRequestSuccess, onUsage }) {
     if (streamToClient) {
-      return { sseResponse: buildSseResponse(response, log, onRequestSuccess) };
+      return { sseResponse: buildSseResponse(response, log, onRequestSuccess, onUsage) };
     }
-    const b64 = await parseStream(response, log);
+    const { imageB64: b64, usage } = await parseStream(response, log);
     if (!b64) {
       throw new Error("Codex did not return an image. Account may not be entitled (Plus/Pro required).");
     }
+    if (usage && onUsage) await onUsage(usage);
     return { created: nowSec(), data: [{ b64_json: b64 }] };
   },
   normalize: (responseBody) => responseBody,

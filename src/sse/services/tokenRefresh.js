@@ -1,6 +1,6 @@
 // Re-export from open-sse with local logger
 import * as log from "../utils/logger.js";
-import { updateProviderConnection } from "../../lib/localDb.js";
+import { getProviderConnectionById, updateProviderConnection } from "../../lib/localDb.js";
 import { getCachedConnectionById, updateCachedConnection } from "@/shared/services/healthCache.js";
 import {
   getProjectIdForConnection,
@@ -25,6 +25,8 @@ import {
   getRefreshLeadMs as _getRefreshLeadMs
 } from "open-sse/services/tokenRefresh.js";
 import {
+  getCredentialExpiryMs,
+  getCredentialLastRefreshMs,
   refreshProviderCredentials as _refreshProviderCredentials,
   shouldRefreshCredentials as _shouldRefreshCredentials,
 } from "open-sse/services/oauthCredentialManager.js";
@@ -109,6 +111,54 @@ function normalizeExpiresAt(expiresAt) {
 }
 
 /**
+ * 0.5.165 — return a copy of `creds` holding the token set from `stored` when
+ * `stored` (health cache or DB row) was refreshed or expires later. Only token
+ * fields move: `creds.providerSpecificData` carries the request's resolved proxy
+ * fields (auth.js), which the stored row does not have (upstream 0bc7f86e).
+ *
+ * @param {object} creds
+ * @param {object|null} stored
+ * @returns {object}
+ */
+function adoptNewerStoredTokens(creds, stored) {
+  if (!stored) return creds;
+  const storedRefreshMs = getCredentialLastRefreshMs(stored);
+  const credsRefreshMs = getCredentialLastRefreshMs(creds);
+  const storedExpiryMs = getCredentialExpiryMs(stored);
+  const credsExpiryMs = getCredentialExpiryMs(creds);
+  const refreshedLater = storedRefreshMs !== null && (credsRefreshMs === null || storedRefreshMs > credsRefreshMs);
+  const expiresLater = storedExpiryMs !== null && (credsExpiryMs === null || storedExpiryMs > credsExpiryMs);
+  if (!refreshedLater && !expiresLater) return creds;
+
+  return {
+    ...creds,
+    accessToken: stored.accessToken || creds.accessToken,
+    refreshToken: stored.refreshToken || creds.refreshToken,
+    idToken: stored.idToken || creds.idToken,
+    expiresAt: stored.expiresAt || stored.tokenExpiresAt || creds.expiresAt,
+    lastRefreshAt: stored.lastRefreshAt || creds.lastRefreshAt,
+  };
+}
+
+/**
+ * Read the connection row straight from the DB (not the 10 s health cache).
+ * @param {string} connectionId
+ * @returns {Promise<object|null>}
+ */
+async function readStoredConnection(connectionId) {
+  if (!connectionId || connectionId === "noauth") return null;
+  try {
+    return await getProviderConnectionById(connectionId);
+  } catch (error) {
+    log.debug("TOKEN_REFRESH", "Could not re-read connection before refresh", {
+      connectionId,
+      error: error?.message ?? error,
+    });
+    return null;
+  }
+}
+
+/**
  * Providers that carry a real Google project ID.
  * @param {string} provider
  * @returns {boolean}
@@ -118,9 +168,9 @@ function needsProjectId(provider) {
 }
 
 /**
- * Non-blocking: fetch the project ID for a connection after a token refresh and
- * persist it to localDb.  Invalidates the stale cached value first so the fetch
- * always retrieves a fresh one.
+ * After a token refresh, drop the cached project ID for a connection. The chat
+ * handler resolves a missing projectId on demand (getProjectIdForConnection).
+ * EAGER_PROJECT_ID_REFRESH=true restores the old non-blocking re-fetch.
  *
  * @param {string} provider
  * @param {string} connectionId
@@ -131,6 +181,11 @@ function _refreshProjectId(provider, connectionId, accessToken) {
 
   // Evict the stale cached entry so getProjectIdForConnection does a real fetch
   invalidateProjectId(connectionId);
+
+  // 0.5.165 — lazy by default: re-fetching (loadCodeAssist, maybe onboardUser)
+  // after every refresh, for several accounts at once, trips Google's
+  // anti-abuse limiter (upstream 1442cc73).
+  if (process.env.EAGER_PROJECT_ID_REFRESH !== "true") return;
 
   getProjectIdForConnection(connectionId, accessToken, provider)
     .then((projectId) => {
@@ -234,26 +289,20 @@ export async function checkAndRefreshToken(provider, credentials) {
   // token in the last ~10s, the health cache holds the fresh value. Consult it
   // BEFORE we touch the network. Saves a full OAuth round trip when multiple
   // IDE requests fire in parallel against the same account.
+  // 0.5.165 — adopt any newer cached token set, even one inside the refresh
+  // lead: refreshing from the older snapshot would present a rotated refresh
+  // token. Keep the request's providerSpecificData (resolved proxy fields).
   if (creds.connectionId && creds.connectionId !== "noauth") {
     try {
-      const fresh = await getCachedConnectionById(creds.connectionId, provider);
-      if (fresh && fresh.expiresAt) {
-        const freshExpiryMs = new Date(fresh.expiresAt).getTime();
-        const staleExpiryMs = creds.expiresAt ? new Date(creds.expiresAt).getTime() : 0;
-        // Only adopt if the cached version is strictly newer AND still valid
-        // for at least the refresh lead window.
-        if (freshExpiryMs > staleExpiryMs && freshExpiryMs - Date.now() > _getRefreshLeadMs(provider)) {
-          creds = {
-            ...creds,
-            accessToken: fresh.accessToken || creds.accessToken,
-            refreshToken: fresh.refreshToken || creds.refreshToken,
-            expiresAt: fresh.expiresAt,
-            lastRefreshAt: fresh.lastRefreshAt || creds.lastRefreshAt,
-            providerSpecificData: fresh.providerSpecificData || creds.providerSpecificData,
-          };
-        }
-      }
+      creds = adoptNewerStoredTokens(creds, await getCachedConnectionById(creds.connectionId, provider));
     } catch { /* cache miss is fine; fall through to normal path */ }
+  }
+
+  // 0.5.165 — about to refresh: the cache can trail another writer (usage
+  // poll, auto-ping, warmer) by up to 10 s, so re-read the DB row first and
+  // skip the refresh when that writer already did it (upstream 0bc7f86e).
+  if (_shouldRefreshCredentials(provider, creds)) {
+    creds = adoptNewerStoredTokens(creds, await readStoredConnection(creds.connectionId));
   }
 
   // ── 1. Regular access-token expiry ────────────────────────────────────────

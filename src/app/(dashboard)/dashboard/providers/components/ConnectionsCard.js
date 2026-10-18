@@ -198,7 +198,7 @@ ConnectionRow.propTypes = {
 };
 
 // ── AddApiKeyModal ─────────────────────────────────────────────
-function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, onClose }) {
+function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, onClose, saveError }) {
   const NONE = "__none__";
   const [formData, setFormData] = useState({ name: "", apiKey: "", priority: 1, proxyPoolId: NONE });
   const [validating, setValidating] = useState(false);
@@ -277,6 +277,11 @@ function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, on
         </div>
         <Select label="Proxy Pool" value={formData.proxyPoolId} onChange={(e) => setFormData({ ...formData, proxyPoolId: e.target.value })}
           options={[{ value: NONE, label: "None" }, ...(proxyPools || []).map((p) => ({ value: p.id, label: p.name }))]} />
+        {/* 0.5.165 — POST /api/providers now answers 409 for a name already in the
+            pool instead of overwriting the stored key, so the modal has to say so. */}
+        {saveError && (
+          <p className="text-xs text-red-500" role="alert">{saveError}</p>
+        )}
         <div className="flex gap-2">
           <Button onClick={handleSubmit} fullWidth disabled={!formData.name || !formData.apiKey || saving}>
             {saving ? "Saving..." : "Save"}
@@ -289,6 +294,7 @@ function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, on
 }
 
 AddApiKeyModal.propTypes = {
+  saveError: PropTypes.string,
   isOpen: PropTypes.bool.isRequired,
   provider: PropTypes.string,
   providerName: PropTypes.string,
@@ -304,6 +310,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
   const [proxyPools, setProxyPools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addKeyError, setAddKeyError] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [providerStrategy, setProviderStrategy] = useState(null);
@@ -387,10 +394,17 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
   };
 
   const handleSaveApiKey = async (formData) => {
+    setAddKeyError("");
     try {
       const res = await fetch("/api/providers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerId, ...formData }) });
-      if (res.ok) { await fetch_(); setShowAddModal(false); }
-    } catch (e) { console.log("save apikey error:", e); }
+      if (res.ok) { await fetch_(); setShowAddModal(false); return; }
+      // 0.5.165 — a silent no-op here read as a frozen modal; show what the API said.
+      const data = await res.json().catch(() => ({}));
+      setAddKeyError(data?.error || `Could not add the key (HTTP ${res.status}).`);
+    } catch (e) {
+      console.log("save apikey error:", e);
+      setAddKeyError("Could not reach kRouter. Check that it is still running.");
+    }
   };
 
   const handleUpdateConnection = async (formData) => {
@@ -465,10 +479,11 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
 
       <AddApiKeyModal
         isOpen={showAddModal}
+        saveError={addKeyError}
         provider={providerId}
         proxyPools={proxyPools}
         onSave={handleSaveApiKey}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => { setShowAddModal(false); setAddKeyError(""); }}
       />
       <EditConnectionModal
         isOpen={showEditModal}

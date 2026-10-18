@@ -3,7 +3,7 @@ import { getProviderConnectionById } from "@/models";
 import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { GEMINI_CONFIG } from "@/lib/oauth/constants/oauth";
 import { refreshGoogleToken, updateProviderCredentials } from "@/sse/services/tokenRefresh";
-import { resolveOllamaLocalHost } from "open-sse/config/providers.js";
+import { resolveOllamaLocalHost, CODEX_CLI_VERSION } from "open-sse/config/providers.js";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveQoderModels } from "open-sse/services/qoderModels.js";
 
@@ -208,9 +208,12 @@ const PROVIDER_MODELS_CONFIG = {
   codex: {
     // 0.5.122 (upstream d587b2a4) — the /codex/models endpoint gates each entry by
     // minimal_client_version; a stale client_version (was 1.0.0) silently filters out
-    // the newest models. codex CLI's own manifest already requires 0.144.x, so use a
-    // current value and send the codex_cli_rs originator like the real client.
-    url: "https://chatgpt.com/backend-api/codex/models?client_version=0.144.6",
+    // the newest models, so send a current value and the codex_cli_rs originator
+    // like the real client.
+    // 0.5.165 — and take it from the one constant the chat transport uses, because
+    // this copy had drifted to 0.144.6 and was hiding the whole GPT-6 family from
+    // the model picker (upstream a7047a07, ca6e8407).
+    url: `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`,
     method: "GET",
     headers: { "Content-Type": "application/json", "Accept": "application/json", "originator": "codex_cli_rs" },
     authHeader: "Authorization",

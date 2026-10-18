@@ -44,10 +44,13 @@ describe("input-size errors (do not fan out)", () => {
     expect(r.shouldFallback).toBe(false);
   });
 
-  it("unrelated 400 still uses default fallback (backwards compat)", () => {
+  it("unrelated 400 is request-scoped: no account lock, no failover (0.5.165)", () => {
     const r = checkFallbackError(400, '{"error":"something else"}');
-    // Falls through to text rules, then to default. Default is shouldFallback:true.
-    expect(r.shouldFallback).toBe(true);
-    expect(r.cooldownMs).toBeGreaterThan(0);
+    // Matches no text rule. 0.5.165 (upstream 20a43f5a): an unmatched 4xx is about
+    // the request, so it no longer takes the 30s transient default. A combo still
+    // advances to its next member on requestScoped.
+    expect(r.shouldFallback).toBe(false);
+    expect(r.cooldownMs).toBe(0);
+    expect(r.requestScoped).toBe(true);
   });
 });

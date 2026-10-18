@@ -8,17 +8,36 @@ export const MITM_TOOLS = {
     description: "Google Antigravity IDE with MITM",
     configType: "mitm",
     mitmDomain: "daily-cloudcode-pa.googleapis.com",
-    modelAliases: ["gemini-3.5-flash-low", "gemini-3-flash-agent", "gemini-3.5-flash-extra-low", "gemini-3.1-pro-low", "gemini-pro-agent", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium", "gemini-3-flash"],
+    // 0.5.165 — Google retired the 3.5 Flash tiers, gemini-3-flash-agent and the
+    // gemini-3-flash command model (upstream 24034f69). The mandatory Default slot
+    // pointed at gemini-3.5-flash-low, so a fresh MITM setup mapped the IDE's
+    // primary turn onto a model that no longer answers.
+    modelAliases: ["gemini-4-argon-high", "gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low", "gemini-3.7-flash-high", "gemini-3.7-flash-medium", "gemini-3.7-flash-low", "gemini-3.6-flash-high", "gemini-3.6-flash-medium", "gemini-3.6-flash-low", "gemini-3.1-pro-high", "gemini-3.1-pro-low", "gemini-pro-agent", "claude-sonnet-5-5", "claude-sonnet-5-5-high", "claude-sonnet-5-5-medium", "claude-sonnet-5-5-low", "claude-opus-5-5", "claude-opus-5-5-high", "claude-opus-5-5-medium", "claude-opus-5-5-low", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium"],
     defaultModels: [
-      { id: "gemini-3.5-flash-low", name: "Gemini 3.5 Flash (Medium) / Default", alias: "gemini-3.5-flash-low", mandatory: true },
-      { id: "gemini-3-flash-agent", name: "Gemini 3.5 Flash (High)", alias: "gemini-3-flash-agent" },
-      { id: "gemini-3.5-flash-extra-low", name: "Gemini 3.5 Flash (Low)", alias: "gemini-3.5-flash-extra-low" },
+      { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium) / Default", alias: "gemini-3.8-flash-medium", mandatory: true },
+      { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", alias: "gemini-3.8-flash-high" },
+      { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", alias: "gemini-3.8-flash-low" },
+      { id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)", alias: "gemini-4-argon-high" },
+      { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", alias: "gemini-3.7-flash-high" },
+      { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", alias: "gemini-3.7-flash-medium" },
+      { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", alias: "gemini-3.7-flash-low" },
+      { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)", alias: "gemini-3.6-flash-high" },
+      { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", alias: "gemini-3.6-flash-medium" },
+      { id: "gemini-3.6-flash-low", name: "Gemini 3.6 Flash (Low)", alias: "gemini-3.6-flash-low" },
+      { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", alias: "gemini-3.1-pro-high" },
       { id: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)", alias: "gemini-3.1-pro-low" },
-      { id: "gemini-pro-agent", name: "Gemini 3.1 Pro (High)", alias: "gemini-pro-agent" },
+      { id: "gemini-pro-agent", name: "Gemini 3.1 Pro (High) / Legacy", alias: "gemini-pro-agent" },
+      { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5 (Thinking)", alias: "claude-sonnet-5-5" },
+      { id: "claude-sonnet-5-5-high", name: "Claude Sonnet 5.5 (High)", alias: "claude-sonnet-5-5-high" },
+      { id: "claude-sonnet-5-5-medium", name: "Claude Sonnet 5.5 (Medium)", alias: "claude-sonnet-5-5-medium" },
+      { id: "claude-sonnet-5-5-low", name: "Claude Sonnet 5.5 (Low)", alias: "claude-sonnet-5-5-low" },
+      { id: "claude-opus-5-5", name: "Claude Opus 5.5 (Thinking)", alias: "claude-opus-5-5" },
+      { id: "claude-opus-5-5-high", name: "Claude Opus 5.5 (High)", alias: "claude-opus-5-5-high" },
+      { id: "claude-opus-5-5-medium", name: "Claude Opus 5.5 (Medium)", alias: "claude-opus-5-5-medium" },
+      { id: "claude-opus-5-5-low", name: "Claude Opus 5.5 (Low)", alias: "claude-opus-5-5-low" },
       { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)", alias: "claude-sonnet-4-6" },
       { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", alias: "claude-opus-4-6-thinking" },
       { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", alias: "gpt-oss-120b-medium" },
-      { id: "gemini-3-flash", name: "Gemini 3 Flash (Command)", alias: "gemini-3-flash" },
     ],
   },
   copilot: {
@@ -58,6 +77,10 @@ export const MITM_TOOLS = {
     mitmDomain: "runtime.us-east-1.kiro.dev",
     defaultModels: [
       { id: "auto", name: "Auto (Kiro agent default)", alias: "auto" },
+      // 0.5.165 — Kiro's picker offers Claude Sonnet 5 (upstream cliTools kiro slot);
+      // without a slot getMappedModel returns null and that turn is passed through
+      // to AWS instead of the provider the user mapped.
+      { id: "claude-sonnet-5", name: "Claude Sonnet 5", alias: "claude-sonnet-5" },
       { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5", alias: "claude-sonnet-4.5" },
       { id: "claude-sonnet-4", name: "Claude Sonnet 4", alias: "claude-sonnet-4" },
       { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", alias: "claude-haiku-4.5" },
@@ -375,7 +398,9 @@ amp --model "{{model}}"
     defaultModels: [
       { id: "claude-opus-4-7", name: "Claude Opus 4.7", alias: "opus", defaultValue: "cc/claude-opus-4-7" },
       { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", alias: "sonnet", defaultValue: "cc/claude-sonnet-4-6" },
-      { id: "gpt-5.5", name: "GPT 5.5", alias: "gpt5", defaultValue: "cx/gpt-5.5" },
+      // 0.5.165 — cx/gpt-5.5 was retired by OpenAI (upstream 7878f53b); the preset
+      // handed jcode a model that answers 400.
+      { id: "gpt-6.1-sol", name: "GPT 6.1 Sol", alias: "gpt5", defaultValue: "cx/gpt-6.1-sol" },
       { id: "gemini-3.1-pro", name: "Gemini 3.1 Pro", alias: "gemini", defaultValue: "gemini/gemini-3.1-pro" },
     ],
   },

@@ -22,7 +22,7 @@ import { CLAUDE_CLI_SPOOF_HEADERS } from "open-sse/config/providers.js";
 import { proxyAwareFetch } from "open-sse/utils/proxyFetch.js";
 import { getExecutor } from "open-sse/executors/index.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
-import { refreshAndUpdateCredentials } from "@/app/api/usage/[connectionId]/route.js";
+import { refreshAndUpdateCredentials, REFRESH_UNRECOVERABLE_CODE } from "@/app/api/usage/[connectionId]/route.js";
 import { CLAUDE_AUTOPING_CONFIG, CODEX_AUTOPING_CONFIG } from "@/shared/constants/config";
 
 const CLAUDE_PING_URL = "https://api.anthropic.com/v1/messages?beta=true";
@@ -34,7 +34,12 @@ const g = (global.__quotaAutoPing ??= {
   resetCache: {},          // key `${provider}:${connId}` -> last-seen resetAt
   disabledUntil: {},       // claude only — billing-disabled skip window
   loggedDisabledReason: {},
+  // 0.5.165 — connId -> the refresh token the provider rejected. Auto-ping is the
+  // writer upstream blames for the logouts: without this it re-POSTed a revoked
+  // token every tick, forever. Keyed on the token, so a reconnect resumes by itself.
+  deadRefreshTokens: new Map(),
 });
+g.deadRefreshTokens ??= new Map();
 
 function cacheKey(provider, id) { return `${provider}:${id}`; }
 
@@ -160,11 +165,18 @@ async function pingConnection(handler, conn) {
   const proxyCfg = await resolveConnectionProxyConfig(conn.providerSpecificData);
   const proxyOptions = buildProxyOptions(proxyCfg);
 
+  // 0.5.165 — a refresh token the provider already rejected needs the user, not
+  // another POST every tick (mirrors tokenWarmer).
+  if (conn.refreshToken && g.deadRefreshTokens.get(conn.id) === conn.refreshToken) return;
+
   let connection = conn;
   try {
     const r = await refreshAndUpdateCredentials(connection, false, proxyOptions);
     connection = r.connection;
   } catch (e) {
+    if (e?.code === REFRESH_UNRECOVERABLE_CODE && conn.refreshToken) {
+      g.deadRefreshTokens.set(conn.id, conn.refreshToken);
+    }
     console.warn(`[AutoPing] ${provider}:${conn.id}: refresh failed: ${e.message}`);
     return;
   }

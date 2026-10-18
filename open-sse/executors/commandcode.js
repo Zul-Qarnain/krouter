@@ -3,6 +3,12 @@ import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { convertCommandCodeToOpenAI } from "../translator/response/commandcode-to-openai.js";
 
+// 0.5.165 (upstream 092c84ea) — a transient upstream stream error is worth a
+// second look before the request moves to another account.
+const STREAM_RETRY_ATTEMPTS = 2;
+const STREAM_RETRY_DELAY_MS = 1000;
+const RETRYABLE_STREAM_STATUS = new Set([502, 503, 504]);
+
 /**
  * CommandCodeExecutor — talks to https://api.commandcode.ai/alpha/generate
  *
@@ -39,10 +45,22 @@ export class CommandCodeExecutor extends BaseExecutor {
   }
 
   async execute(opts) {
-    const result = await super.execute(opts);
-    if (!result?.response?.ok || !result.response.body) return result;
-    result.response = await inspectAndWrapCommandCodeResponse(result.response, opts.model);
-    return result;
+    for (let attempt = 0; ; attempt++) {
+      const result = await super.execute(opts);
+      if (!result?.response?.ok || !result.response.body) return result;
+
+      const wrapped = await inspectAndWrapCommandCodeResponse(result.response, opts.model);
+      // 0.5.165 (upstream 092c84ea) — the peek verdict is the only place the
+      // transient failures show up, because CommandCode reports them as a
+      // `type:"error"` event inside an HTTP 200 stream. "Network connection lost."
+      // is the common one and a second attempt usually answers, so retry a 5xx
+      // verdict here instead of burning the account's fallback slot on it.
+      const retryable = !wrapped.ok && RETRYABLE_STREAM_STATUS.has(wrapped.status);
+      if (!retryable || attempt >= STREAM_RETRY_ATTEMPTS) return { ...result, response: wrapped };
+
+      opts.log?.debug?.("RETRY", `CommandCode stream verdict ${wrapped.status}, retry ${attempt + 1}/${STREAM_RETRY_ATTEMPTS}`);
+      await new Promise((resolve) => setTimeout(resolve, STREAM_RETRY_DELAY_MS * (attempt + 1)));
+    }
   }
 
   // Lets parseUpstreamError() pull a clean message/status out of the body we

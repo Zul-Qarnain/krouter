@@ -24,7 +24,16 @@ export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [
   "title", "optional", "if", "then", "else", "contentMediaType", "contentEncoding",
   // UI/Styling properties (from Cursor tools - NOT JSON Schema standard)
   "cornerRadius", "fillColor", "fontFamily", "fontSize", "fontWeight",
-  "gap", "padding", "strokeColor", "strokeThickness", "textColor"
+  "gap", "padding", "strokeColor", "strokeThickness", "textColor",
+  // 0.5.165 — non-standard annotation keywords some MCP tool schemas carry
+  // (JSON-Schema editor/IDE extensions). Gemini's schema proto has no field for
+  // them, so one occurrence anywhere rejects the whole request with
+  // "Unknown name X: Cannot find field" (upstream aafe3002). The x-* spellings
+  // are already covered by the `x-` prefix rule in removeUnsupportedKeywords;
+  // they are listed for the record only.
+  "errorMessage", "errorMessages", "markdownDescription",
+  "doNotSuggest", "suggestSortText", "deprecated",
+  "minProperties", "maxProperties"
 ];
 
 // Default safety settings
@@ -296,7 +305,18 @@ function flattenTypeArrays(obj) {
 function ensureObjectType(obj) {
   if (!obj || typeof obj !== "object") return;
   if (obj.properties && !obj.type) obj.type = "object";
-  for (const v of Object.values(obj)) if (v && typeof v === "object") ensureObjectType(v);
+  // 0.5.165 — a `properties` map is a map of schemas, not a schema node. An MCP
+  // tool with a parameter literally named `properties` made the old blanket
+  // recursion stamp `type: "object"` onto the map itself, which Gemini then read
+  // as a second parameter named "type" and rejected with 400 (upstream 09f6d395).
+  for (const [key, v] of Object.entries(obj)) {
+    if (!v || typeof v !== "object") continue;
+    if (key === "properties" && !Array.isArray(v)) {
+      for (const sub of Object.values(v)) ensureObjectType(sub);
+    } else {
+      ensureObjectType(v);
+    }
+  }
 }
 
 // Convert prefixItems (tuple validation) to items -- Gemini cannot express tuples,
@@ -421,5 +441,85 @@ export function cleanJSONSchemaForAntigravity(schema) {
   addPlaceholders(cleaned);
 
   return cleaned;
+}
+
+// 0.5.165 — Gemini / Cloud Code read a `$ref` key inside functionResponse.response
+// as a pointer into functionResponse.parts and answer 400 INVALID_ARGUMENT
+// ("The referenced name `#/$defs/...` ... does not match to a display_name in the
+// function_response.parts"). Tool results that carry a JSON Schema or OpenAPI
+// document (webfetch, read, MCP) hit this, so the key is renamed in place
+// (upstream 625df74d).
+export const GEMINI_RESERVED_RESPONSE_KEYS = { "$ref": "_ref" };
+
+// Recursively rename reserved keys in a tool-result payload. Returns a new value;
+// the caller's payload is never mutated.
+export function sanitizeFunctionResponsePayload(value) {
+  if (Array.isArray(value)) return value.map(sanitizeFunctionResponsePayload);
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  for (const [key, val] of Object.entries(value)) {
+    // 0.5.165 — Object.hasOwn, not `MAP[key] ?? key`: a plain-object lookup reaches
+    // Object.prototype, so tool output with a key named "constructor", "toString" or
+    // "__proto__" had that key replaced by the stringified prototype member.
+    // defineProperty, not assignment: a literal "__proto__" key would otherwise hit
+    // the inherited setter and be dropped rather than passed through.
+    const name = Object.hasOwn(GEMINI_RESERVED_RESPONSE_KEYS, key) ? GEMINI_RESERVED_RESPONSE_KEYS[key] : key;
+    Object.defineProperty(out, name, {
+      value: sanitizeFunctionResponsePayload(val),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return out;
+}
+
+// Return the part with a sanitized functionResponse.response (same reference when untouched)
+function sanitizeFunctionResponsePart(part) {
+  const response = part?.functionResponse?.response;
+  if (!response || typeof response !== "object") return part;
+  return { ...part, functionResponse: { ...part.functionResponse, response: sanitizeFunctionResponsePayload(response) } };
+}
+
+// 0.5.165 — one normalizer for every Gemini-shaped `contents` array: the
+// openai -> gemini translator, the Claude -> Antigravity envelope and the
+// Antigravity executor (which creates adjacent same-role turns and empty parts
+// when it strips thought blocks). Google answers 400 INVALID_ARGUMENT for
+// adjacent same-role turns, an empty parts array, a history that does not open
+// on a user turn, and a history that ends on a model turn or an unanswered
+// functionCall (upstream 8d1db46b + e7b5f09d + 30464bc2 + 625df74d).
+// Input is never mutated.
+export function normalizeGeminiContents(contents) {
+  const out = [];
+  for (const c of contents || []) {
+    if (!c?.role || !Array.isArray(c.parts)) continue;
+    const parts = c.parts.filter(p => p && Object.keys(p).length > 0).map(sanitizeFunctionResponsePart);
+    if (parts.length === 0) continue;
+    const last = out.at(-1);
+    if (last?.role === c.role) last.parts.push(...parts);
+    else out.push({ ...c, parts: [...parts] });
+  }
+  if (out.length > 0 && out[0].role !== "user") {
+    out.unshift({ role: "user", parts: [{ text: "..." }] });
+  }
+  if (out.length > 0 && out.at(-1).role === "model") {
+    // An unanswered functionCall needs a functionResponse, not text — Gemini
+    // rejects a call with no matching response.
+    const fnCalls = out.at(-1).parts.filter(p => p?.functionCall);
+    if (fnCalls.length > 0) {
+      out.push({
+        role: "user",
+        parts: fnCalls.map(p => {
+          const call = p.functionCall || {};
+          const functionResponse = { name: call.name || "tool", response: { result: "Continue." } };
+          if (call.id) functionResponse.id = call.id;
+          return { functionResponse };
+        })
+      });
+    } else {
+      out.push({ role: "user", parts: [{ text: "Continue." }] });
+    }
+  }
+  return out;
 }
 

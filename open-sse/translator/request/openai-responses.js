@@ -10,7 +10,48 @@ import { normalizeResponsesInput } from "../helpers/responsesApiHelper.js";
 
 // Responses API enforces max 64 chars on call_id (#393)
 const MAX_CALL_ID_LEN = 64;
-const clampCallId = (id) => (typeof id === "string" && id.length > MAX_CALL_ID_LEN ? id.substring(0, MAX_CALL_ID_LEN) : id);
+// 0.5.165 — strict Responses upstreams also cap tool names at 128 (upstream e74db4d0)
+const MAX_TOOL_NAME_LEN = 128;
+
+// 0.5.165 — a missing call_id used to stay undefined and 400 the request; fall back
+// to a unique id. The sequence keeps same-millisecond fallbacks distinct (upstream
+// e74db4d0 + 11222eff).
+let fallbackCallIdSeq = 0;
+const clampCallId = (id) => {
+  if (typeof id !== "string" || !id) return `call_${Date.now()}_${(fallbackCallIdSeq += 1)}`;
+  return id.length > MAX_CALL_ID_LEN ? id.substring(0, MAX_CALL_ID_LEN) : id;
+};
+
+// 0.5.165 — arguments must be exactly one JSON string: objects are stringified once,
+// valid JSON strings pass through, anything else (partial fragment, empty) becomes
+// "{}" instead of tripping InputValidationError (upstream e74db4d0).
+function coerceCallArguments(value) {
+  if (value === undefined || value === null || value === "") return "{}";
+  if (typeof value !== "string") {
+    try { return JSON.stringify(value) ?? "{}"; } catch { return "{}"; }
+  }
+  try { JSON.parse(value); return value; } catch { return "{}"; }
+}
+
+// 0.5.165 — function_call_output.output must be a string; null used to go out as
+// "null". Fail-soft on circular / BigInt values (upstream e74db4d0 + 11222eff).
+function stringifySoft(value) {
+  try { return JSON.stringify(value) ?? String(value); } catch { return String(value); }
+}
+function coerceCallOutput(value) {
+  if (typeof value === "string") return value;
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.map((c) => (typeof c?.text === "string" ? c.text : stringifySoft(c))).join("");
+  return stringifySoft(value);
+}
+
+// 0.5.165 — a nameless call or tool is rejected by strict Responses upstreams (#444).
+const toolName = (name) => (typeof name === "string" ? name.trim().slice(0, MAX_TOOL_NAME_LEN) : "");
+
+// 0.5.165 — Responses takes the cap as max_output_tokens (upstream ab044e6d). 0 or a
+// negative value means "unset" to some clients; never turn it into a cap.
+const outputCap = (body) => [body.max_output_tokens, body.max_completion_tokens, body.max_tokens]
+  .find((v) => Number.isFinite(v) && v > 0);
 
 /**
  * Convert OpenAI Responses API request to OpenAI Chat Completions format
@@ -213,7 +254,17 @@ function normalizeToolParameters(params) {
  */
 export function openaiToOpenAIResponsesRequest(model, body, stream, credentials) {
   // Body already in Responses API format (e.g. Cursor CLI calling /chat/completions with input[])
-  if (body.input) return { ...body, model, stream: true };
+  // 0.5.165 — still map the Chat-style cap: OpenAI-compatible Responses nodes go
+  // through DefaultExecutor, which never strips max_tokens (upstream ab044e6d).
+  if (body.input) {
+    const { max_tokens, max_completion_tokens, ...rest } = body;
+    const out = { ...rest, model, stream: true };
+    if (out.max_output_tokens === undefined) {
+      const cap = outputCap(body);
+      if (cap !== undefined) out.max_output_tokens = cap;
+    }
+    return out;
+  }
 
   const result = {
     model,
@@ -277,28 +328,27 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
     }
 
     // Convert tool calls
+    // 0.5.165 — skip nameless calls (was "_unknown"), clamp names, one JSON string
+    // of arguments (upstream e74db4d0).
     if (msg.role === "assistant" && msg.tool_calls) {
       for (const tc of msg.tool_calls) {
+        const name = toolName(tc.function?.name);
+        if (!name) continue;
         result.input.push({
           type: "function_call",
           call_id: clampCallId(tc.id),
-          name: tc.function?.name || "_unknown",
-          arguments: tc.function?.arguments || "{}"
+          name,
+          arguments: coerceCallArguments(tc.function?.arguments)
         });
       }
     }
 
     // Convert tool results - output must be a string for Responses API
     if (msg.role === "tool") {
-      const output = typeof msg.content === "string"
-        ? msg.content
-        : Array.isArray(msg.content)
-          ? msg.content.map(c => c.text || JSON.stringify(c)).join("")
-          : JSON.stringify(msg.content);
       result.input.push({
         type: "function_call_output",
         call_id: clampCallId(msg.tool_call_id),
-        output
+        output: coerceCallOutput(msg.content)
       });
     }
   }
@@ -307,25 +357,39 @@ export function openaiToOpenAIResponsesRequest(model, body, stream, credentials)
   result.instructions = hasSystemMessage ? instructionParts.join("\n\n") : "";
 
   // Convert tools format
+  // 0.5.165 — drop nameless function tools and clamp names (upstream e74db4d0).
   if (body.tools && Array.isArray(body.tools)) {
     result.tools = body.tools.map(tool => {
       if (tool.type === "function") {
+        const name = toolName(tool.function?.name);
+        if (!name) return null;
         return {
           type: "function",
-          name: tool.function.name,
+          name,
           description: String(tool.function.description || ""),
           parameters: normalizeToolParameters(tool.function.parameters),
           strict: tool.function.strict
         };
       }
       return tool;
-    });
+    }).filter(Boolean);
   }
 
   // Pass through other relevant fields
   if (body.temperature !== undefined) result.temperature = body.temperature;
-  if (body.max_tokens !== undefined) result.max_tokens = body.max_tokens;
+  // 0.5.165 — Responses wants max_output_tokens; max_tokens 400s on real OpenAI
+  // /v1/responses and max_completion_tokens was dropped (upstream ab044e6d).
+  const cap = outputCap(body);
+  if (cap !== undefined) result.max_output_tokens = cap;
   if (body.top_p !== undefined) result.top_p = body.top_p;
+  // 0.5.165 — reasoning_effort was dropped, so a chat client's effort never reached
+  // Codex / Grok CLI / Copilot /responses (upstream ab044e6d). Only the Responses
+  // fields are forwarded: other shapes (OpenRouter's {enabled, max_tokens}) would be
+  // rejected by a strict upstream.
+  const effort = body.reasoning_effort ?? body.reasoning?.effort;
+  if (typeof effort === "string" && effort) {
+    result.reasoning = { effort, summary: body.reasoning?.summary || "auto" };
+  }
   // 0.5.121 (upstream c97963c4) — forward service_tier (priority/default/flex)
   // instead of silently dropping it on the OpenAI→Responses conversion.
   if (body.service_tier !== undefined) result.service_tier = body.service_tier;

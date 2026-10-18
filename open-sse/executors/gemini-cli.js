@@ -2,6 +2,20 @@ import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { OAUTH_ENDPOINTS, GEMINI_CLI_API_CLIENT, geminiCLIUserAgent } from "../config/appConstants.js";
 
+// google.rpc.RetryInfo.retryDelay: "34.074824224s" or the proto { seconds, nanos }.
+// Returns whole milliseconds, or null when it is missing or unreadable.
+function retryDelayMs(delay) {
+  if (typeof delay === "string") {
+    const m = delay.trim().match(/^(\d+(?:\.\d+)?)s$/);
+    return m ? Math.ceil(parseFloat(m[1]) * 1000) || null : null;
+  }
+  if (delay && typeof delay === "object") {
+    const ms = Number(delay.seconds || 0) * 1000 + Math.ceil(Number(delay.nanos || 0) / 1e6);
+    return Number.isFinite(ms) && ms > 0 ? ms : null;
+  }
+  return null;
+}
+
 export class GeminiCLIExecutor extends BaseExecutor {
   constructor() {
     super("gemini-cli", PROVIDERS["gemini-cli"]);
@@ -45,6 +59,10 @@ export class GeminiCLIExecutor extends BaseExecutor {
         for (const d of details) {
           if (d?.["@type"] === "type.googleapis.com/google.rpc.RetryInfo" && d?.retryDelay) {
             base.retryAfter = d.retryDelay;
+            // 0.5.165 — also as resetsAtMs: retryAfter alone reached no lock, so
+            // markAccountUnavailable fell back to generic backoff (capped at 6h there).
+            const delayMs = retryDelayMs(d.retryDelay);
+            if (delayMs) base.resetsAtMs = Date.now() + delayMs;
             break;
           }
         }

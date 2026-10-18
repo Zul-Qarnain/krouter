@@ -204,6 +204,29 @@ export function openCodeGoSessionId({ credentials, body, clientTool } = {}) {
 
 export const OPENCODE_GO_SESSION_HEADER = SESSION_HEADER;
 
+// 0.5.165 (upstream 468aa7d9) — the relay answers 400 for every `response_format`
+// on its deepseek family, both json_schema and json_object, while serving the field
+// for glm / kimi / mimo / minimax / qwen / grok on the same relay. The rejection
+// body is a bare model echo (`{"model":"deepseek-v4.1-flash"}`) naming neither the
+// field nor the reason, so the field-name self-healing in base.js cannot classify
+// it and the client re-sends the field on every retry. Upstream measured it on
+// 2026-10-13 with one Go key: 12/12 structured calls 400, 4/4 identical calls
+// without the field 200. Dropping is the only option — json_object is refused too.
+const CHAT_REJECTED_PARAMS = [
+  { match: /^deepseek/i, drop: ["response_format"] },
+];
+
+// Returns the body unchanged when no rule fires, and a copy otherwise: the object
+// can be the caller's own.
+function withoutRejectedChatParams(model, body) {
+  if (!body || typeof body !== "object") return body;
+  const drop = CHAT_REJECTED_PARAMS
+    .filter((rule) => rule.match.test(String(model || "")))
+    .flatMap((rule) => rule.drop)
+    .filter((key) => body[key] !== undefined);
+  return drop.length ? withoutKeys(body, drop) : body;
+}
+
 // OpenCode answers a model it cannot serve on an endpoint (or an unknown model)
 // with HTTP 401 + {type:"ModelError"}, before it even checks the key. kRouter
 // treats 401 as a bad account and cools the WHOLE account down -- every model on
@@ -288,6 +311,10 @@ export class OpenCodeGoExecutor extends BaseExecutor {
     if (openCodeGoTransport(model, credentials) === "responses") {
       return toOpenCodeGoResponsesBody(model, body, stream, credentials);
     }
-    return injectReasoningContent({ provider: this.provider, model, body });
+    return injectReasoningContent({
+      provider: this.provider,
+      model,
+      body: withoutRejectedChatParams(model, body),
+    });
   }
 }

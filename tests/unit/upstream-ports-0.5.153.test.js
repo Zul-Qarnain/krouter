@@ -142,7 +142,9 @@ describe("Claude tools always carry an explicit type", () => {
 
   it("is applied on the Claude path in chatCore", () => {
     const src = noComments(read("open-sse/handlers/chatCore.js"));
-    expect(src).toContain("finalFormat === FORMATS.CLAUDE && Array.isArray(translatedBody.tools)");
+    // 0.5.165 — scoped to the gateways that require it (upstream 998bb3d9); see
+    // claude-tool-type-default-scoped-to-minimax.test.js for the behaviour.
+    expect(src).toContain("shouldDefaultClaudeToolType(provider, finalFormat, translatedBody.tools)");
     expect(src).toContain("defaultClaudeToolType(translatedBody.tools)");
   });
 });

@@ -18,7 +18,7 @@
 import "open-sse/index.js";
 
 import { getProviderConnections } from "@/lib/localDb";
-import { refreshAndUpdateCredentials } from "@/app/api/usage/[connectionId]/route.js";
+import { refreshAndUpdateCredentials, REFRESH_UNRECOVERABLE_CODE } from "@/app/api/usage/[connectionId]/route.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 
 // 60s tick — small enough to catch tokens about to expire, large enough that
@@ -37,6 +37,21 @@ const g = (global.__krouterTokenWarmer ??= {
   interval: null,
   lastRefreshedAt: new Map(), // connectionId -> ms epoch
 });
+// 0.5.165 — connectionId -> refresh token the provider rejected for good.
+// Skipped until the row holds a different one (the user re-authorized).
+g.deadRefreshTokens ??= new Map();
+
+// Same shape the usage route and auto-ping use: refresh through the
+// connection's proxy, falling back to direct if that proxy fails.
+function buildProxyOptions(cfg) {
+  return {
+    connectionProxyEnabled: cfg?.connectionProxyEnabled === true,
+    connectionProxyUrl: cfg?.connectionProxyUrl || "",
+    connectionNoProxy: cfg?.connectionNoProxy || "",
+    vercelRelayUrl: cfg?.vercelRelayUrl || "",
+    strictProxy: false,
+  };
+}
 
 function shouldWarmConnection(conn, nowMs) {
   // Only OAuth providers carry refreshable tokens.
@@ -57,6 +72,7 @@ function shouldWarmConnection(conn, nowMs) {
 
   // Need a refresh token to refresh.
   if (!conn.refreshToken) return false;
+  if (g.deadRefreshTokens.get(conn.id) === conn.refreshToken) return false;
 
   // Need a known expiry to decide if it's worth refreshing.
   const expiresAt = conn.expiresAt || conn.tokenExpiresAt;
@@ -101,11 +117,17 @@ async function tick() {
     due.map(async (conn) => {
       g.lastRefreshedAt.set(conn.id, Date.now());
       try {
-        const proxyOptions = await resolveConnectionProxyConfig(conn).catch(() => null);
-        await refreshAndUpdateCredentials(conn, false, proxyOptions);
-      } catch {
-        // Silent — the warmer is best-effort. Real user-facing refresh path
-        // will surface any genuine failure with its own log line.
+        // 0.5.165 — the proxy config lives in providerSpecificData; passing the
+        // whole row resolved no proxy, so warm-up refreshes left over the real IP.
+        const proxyCfg = await resolveConnectionProxyConfig(conn.providerSpecificData || {}).catch(() => null);
+        await refreshAndUpdateCredentials(conn, false, buildProxyOptions(proxyCfg));
+      } catch (error) {
+        // Best-effort: transient failures stay quiet and the real request path
+        // logs its own. A rejected refresh token needs the user, so say it once.
+        if (error?.code === REFRESH_UNRECOVERABLE_CODE) {
+          g.deadRefreshTokens.set(conn.id, conn.refreshToken);
+          console.warn(`[TokenWarmer] ${conn.provider}:${conn.id}: ${error.message}`);
+        }
       }
     })
   );

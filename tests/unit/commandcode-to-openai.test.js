@@ -116,12 +116,16 @@ describe("commandcode-to-openai — finish", () => {
 });
 
 describe("commandcode-to-openai — error event", () => {
-  it("stringifies object errors so client sees readable message", () => {
-    const { chunks } = feed([
+  // 0.5.165 (upstream 092c84ea) — an error reaching the translator is mid-stream
+  // (a leading one is already a real HTTP status), so it must abort the stream
+  // rather than become content with finish_reason:"stop". See
+  // commandcode-mid-stream-error-is-not-a-clean-stop.test.js for the full case.
+  it("throws with a readable message instead of emitting object errors as content", () => {
+    expect(() => feed([
       { type: "error", error: { type: "server_error", message: "Boom" } },
-    ]);
-    const text = chunks[0].choices[0].delta.content;
-    expect(text).toContain("Boom");
-    expect(text).not.toContain("[object Object]");
+    ])).toThrow(/Boom/);
+    expect(() => feed([
+      { type: "error", error: { type: "server_error", message: "Boom" } },
+    ])).not.toThrow(/\[object Object\]/);
   });
 });

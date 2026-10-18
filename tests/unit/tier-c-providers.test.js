@@ -189,12 +189,16 @@ describe("CodeBuddy CN — gateway quirks", () => {
     expect(out.stream).toBe(true);
   });
 
-  it("defaults reasoning_effort and sets reasoning_summary so reasoning surfaces", async () => {
+  // 0.5.165 (upstream d1e98d9a, #2071) — the forced default is gone: sending
+  // reasoning_effort:"medium" + reasoning_summary:"auto" on a request the client
+  // asked no reasoning on trips CodeBuddy's content filter. See
+  // codebuddy-reasoning-is-opt-in-and-clamped.test.js.
+  it("sends no reasoning params at all when the client asked for none", async () => {
     const { CodeBuddyExecutor } = await import("../../open-sse/executors/codebuddy-cn.js");
     const ex = new CodeBuddyExecutor();
     const out = ex.transformRequest("glm-5.2", { messages: [] }, true, {});
-    expect(out.reasoning_effort).toBe("medium");
-    expect(out.reasoning_summary).toBe("auto");
+    expect(out.reasoning_effort).toBeUndefined();
+    expect(out.reasoning_summary).toBeUndefined();
   });
 
   it("omits reasoning_effort entirely for none/off (gateway has no such tier)", async () => {

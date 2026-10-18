@@ -276,6 +276,37 @@ function resolveConnectionProxyUrl(targetUrl, proxyOptions) {
   return normalizeProxyUrl(proxyUrlRaw);
 }
 
+// 0.5.165 — strictProxy is a requirement only when a proxy was intended.
+// Callers that set strictProxy to mean "never replay this directly if the proxy
+// fails" must keep working with nothing configured (upstream 24664f2c).
+export function isStrictProxyIntended(proxyOptions) {
+  if (proxyOptions?.strictProxy !== true) return false;
+  return !!(
+    normalizeString(proxyOptions.proxyPoolId)
+    || proxyOptions.enabled === true
+    || proxyOptions.connectionProxyEnabled === true
+    || normalizeString(proxyOptions.url ?? proxyOptions.connectionProxyUrl)
+  );
+}
+
+// 0.5.165 — under strict, a noProxy entry exempts a host only when it belongs
+// to a proxy configured for this request. A disabled legacy proxy's noProxy
+// stays saved on the connection and must not open a direct path (kRouter-own).
+function isConfiguredNoProxyHost(targetUrl, proxyOptions) {
+  const enabled = proxyOptions?.enabled === true || proxyOptions?.connectionProxyEnabled === true;
+  if (!enabled || !normalizeString(proxyOptions?.url ?? proxyOptions?.connectionProxyUrl)) return false;
+  return shouldBypassByNoProxy(targetUrl, proxyOptions?.noProxy ?? proxyOptions?.connectionNoProxy);
+}
+
+// 0.5.165 — spreading a Headers instance yields {}, which dropped Authorization
+// and Content-Type on relay pools and on the MITM bypass (upstream 6af26a9e).
+function toPlainHeaders(headers) {
+  if (!headers) return {};
+  if (headers instanceof Headers) return Object.fromEntries(headers.entries());
+  if (Array.isArray(headers)) return Object.fromEntries(headers);
+  return { ...headers };
+}
+
 /**
  * Create proxy dispatcher lazily (undici-compatible)
  */
@@ -321,7 +352,7 @@ async function createBypassRequest(parsedUrl, realIP, options) {
       path: parsedUrl.pathname + parsedUrl.search,
       method: options.method || "POST",
       headers: {
-        ...options.headers,
+        ...toPlainHeaders(options.headers),
         Host: parsedUrl.hostname,
         // Hint to upstream that we want to reuse this connection.
         Connection: "keep-alive",
@@ -362,7 +393,7 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   if (vercelRelayUrl) {
     const parsed = new URL(targetUrl);
     const relayHeaders = {
-      ...options.headers,
+      ...toPlainHeaders(options.headers),
       "x-relay-target": `${parsed.protocol}//${parsed.host}`,
       "x-relay-path": `${parsed.pathname}${parsed.search}`,
     };
@@ -372,6 +403,15 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   const connectionProxyUrl = resolveConnectionProxyUrl(targetUrl, proxyOptions);
   const envProxyUrl = connectionProxyUrl ? null : normalizeProxyUrl(getEnvProxyUrl(targetUrl));
   const proxyUrl = connectionProxyUrl || envProxyUrl;
+
+  // 0.5.165 — strict means "never leave over the direct IP". A proxy that was
+  // intended but resolved to nothing (inactive or empty pool, failed pool
+  // lookup) is that case, so refuse here, before both direct paths below,
+  // including the MITM bypass that dials the real IP by hand (upstream
+  // 24664f2c). A host the configured proxy's noProxy lists goes direct on purpose.
+  if (!proxyUrl && isStrictProxyIntended(proxyOptions) && !isConfiguredNoProxyHost(targetUrl, proxyOptions)) {
+    throw new Error("[ProxyFetch] Proxy required but none resolved (strictProxy=true)");
+  }
 
   // MITM DNS bypass: for known MITM-intercepted hosts, resolve real IP to avoid DNS spoof
   if (shouldBypassMitmDns(targetUrl)) {

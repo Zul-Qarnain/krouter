@@ -124,12 +124,17 @@ async function readResponsePrefix(response, signal, maxBytes, timeoutMs) {
   return decoder.decode(concatChunks(chunks, totalBytes));
 }
 
+// 0.5.165 — the instruction rides in the current user turn, never in a top-level
+// `systemPrompt`: kiro.dev answers any body carrying that field with a terminal
+// 400 REQUEST_BODY_INVALID, so every repair retry was a hard failure (upstream 1892ed77).
 function appendRepairInstruction(body, kind) {
   const repaired = structuredClone(body || {});
   const instruction = REPAIR_INSTRUCTIONS[kind] || "Retry the previous incomplete Kiro response.";
-  repaired.systemPrompt = repaired.systemPrompt
-    ? `${repaired.systemPrompt}\n\n${instruction}`
-    : instruction;
+  const message = repaired.conversationState?.currentMessage?.userInputMessage;
+  if (message) {
+    const content = typeof message.content === "string" ? message.content : "";
+    message.content = content ? `${content}\n\n${instruction}` : instruction;
+  }
   return repaired;
 }
 
@@ -140,6 +145,12 @@ function normalizeStopReason(value) {
   if (["maxtokens", "max_tokens", "max_output_tokens", "length"].includes(reason)) return "max_tokens";
   return reason || null;
 }
+
+// 0.5.165 — of the reasons stopDisposition() folds into "terminal_incomplete", only
+// these mean "usable as far as it got, then the budget ran out", which is what
+// finish_reason "length" is for. cancelled / pause_turn are abandoned turns whose
+// partial content stays private, so they are deliberately absent (upstream b44bb09f).
+const KIRO_TRUNCATION_STOP_REASONS = new Set(["model_context_window_exceeded", "max_tokens"]);
 
 function stopDisposition(stopReason, hasToolCalls) {
   if (["malformed_model_output", "invalid_model_output"].includes(stopReason)) return "retryable_protocol_failure";
@@ -355,7 +366,8 @@ export class KiroExecutor extends BaseExecutor {
             maxBytes,
             ttftTimeoutMs,
             stallTimeoutMs,
-            repairEnabled
+            repairEnabled,
+            log: args.log
           });
           if (abortController.signal.aborted) throw makeAbortError(abortController.signal.reason);
           controller.enqueue(bytes);
@@ -500,6 +512,7 @@ export class KiroExecutor extends BaseExecutor {
     let diagnostics;
     const transformed = this.transformEventStreamToSSE(rawResponse, model, {
       maxToolBytes: Math.max(1, Math.floor(options.maxBytes / 2)),
+      log: options.log,
       onTerminalState: (value) => {
         diagnostics = value;
       }
@@ -690,16 +703,30 @@ export class KiroExecutor extends BaseExecutor {
         throw new Error(`Kiro tool input must be valid object JSON (${error.message})`);
       }
     };
+    const hasSemanticOutput = () => state.hasText || state.hasReasoning || state.hasCode;
+    const validToolInput = (tool) => {
+      const input = parsedToolInput(tool);
+      if (tool.name === "tool_call") {
+        if (typeof input.name !== "string" || !input.name.trim()) {
+          throw new Error("Invalid Kiro tool_call payload: missing nested MCP tool name");
+        }
+        if (!Object.prototype.hasOwnProperty.call(input, "arguments")) {
+          throw new Error("Invalid Kiro tool_call payload: missing nested MCP tool arguments");
+        }
+      }
+      return input;
+    };
     const emitTools = (controller) => {
       for (const tool of state.tools.values()) {
-        const input = parsedToolInput(tool);
-        if (tool.name === "tool_call") {
-          if (typeof input.name !== "string" || !input.name.trim()) {
-            throw new Error("Invalid Kiro tool_call payload: missing nested MCP tool name");
-          }
-          if (!Object.prototype.hasOwnProperty.call(input, "arguments")) {
-            throw new Error("Invalid Kiro tool_call payload: missing nested MCP tool arguments");
-          }
+        // 0.5.165 — validate per tool, not per turn: one unusable call used to
+        // throw out of the loop and take every complete call with it (upstream b44bb09f).
+        let input;
+        try {
+          input = validToolInput(tool);
+        } catch (error) {
+          state.toolValidationError ||= error.message;
+          options.log?.warn?.("KIRO", `dropping unusable tool call ${tool.id} (${tool.name}): ${error.message}`);
+          continue;
         }
         const index = state.toolCounter++;
         emitDelta(controller, {
@@ -710,14 +737,20 @@ export class KiroExecutor extends BaseExecutor {
             function: { name: tool.name, arguments: "" }
           }]
         });
+        const serializedInput = JSON.stringify(input);
         emitDelta(controller, {
-          tool_calls: [{ index, function: { arguments: JSON.stringify(input) } }]
+          tool_calls: [{ index, function: { arguments: serializedInput } }]
         });
+        // 0.5.165 — tool arguments are billed output too; without this the /4
+        // estimator in finish() reported OUT 0/1 for a tool-only turn (upstream b44bb09f).
+        state.totalContentLength += tool.name.length + serializedInput.length;
         state.hasToolCalls = true;
       }
       state.tools.clear();
       state.bufferedToolBytes = 0;
-      if (state.stopReason === "tool_use" && !state.hasToolCalls) {
+      // 0.5.165 — a declared tool turn with no usable call is fatal only when the
+      // turn produced nothing else (upstream b44bb09f).
+      if (state.stopReason === "tool_use" && !state.hasToolCalls && !hasSemanticOutput()) {
         throw new Error("Kiro tool_use stop reason did not include a complete tool call");
       }
     };
@@ -761,7 +794,6 @@ export class KiroExecutor extends BaseExecutor {
         emitDelta(controller, { content: event.payload.content });
       } else if (eventType === "toolUseEvent") {
         state.sawToolUse = true;
-        if (state.toolValidationError) return true;
         const values = Array.isArray(event.payload) ? event.payload : [event.payload];
         if (!values[0]) throw new Error("Kiro toolUseEvent is empty");
         for (const value of values) {
@@ -889,9 +921,11 @@ export class KiroExecutor extends BaseExecutor {
         } catch (error) {
           const bufferExceeded = error.code === "KIRO_BUFFER_EXCEEDED";
           if (!bufferExceeded) {
+            // 0.5.165 — the rejected fragment belongs to one tool; clearing the
+            // map dropped the complete calls too. emitTools() drops only the
+            // unusable ones (upstream b44bb09f).
             state.toolValidationError ||= error.message;
-            state.tools.clear();
-            state.bufferedToolBytes = 0;
+            options.log?.warn?.("KIRO", `tool fragment rejected, keeping ${state.tools.size} buffered tool(s): ${error.message}`);
             continue;
           }
           fail(
@@ -923,7 +957,17 @@ export class KiroExecutor extends BaseExecutor {
       }
       state.transportState = "clean_eof";
       const declaredDisposition = stopDisposition(state.stopReason, state.sawToolUse);
-      if (["retryable_protocol_failure", "terminal_incomplete", "terminal_refusal", "unknown_failure"].includes(declaredDisposition)) {
+      // 0.5.165 — a context-window / max_tokens stop after real output keeps that
+      // output and closes as "length" instead of failing the whole turn. Keyed on
+      // semantic output, not chunkIndex (empty content deltas are not an answer),
+      // so a truncation that produced nothing still fails closed (upstream b44bb09f).
+      const isTruncatedAfterOutput = (disposition) => disposition === "terminal_incomplete" &&
+        KIRO_TRUNCATION_STOP_REASONS.has(state.stopReason) && hasSemanticOutput();
+      if (isTruncatedAfterOutput(declaredDisposition)) {
+        options.log?.warn?.("KIRO", `truncated after output (stop_reason=${state.stopReason}); keeping it as length`);
+      }
+      if (!isTruncatedAfterOutput(declaredDisposition) &&
+          ["retryable_protocol_failure", "terminal_incomplete", "terminal_refusal", "unknown_failure"].includes(declaredDisposition)) {
         const code = declaredDisposition === "retryable_protocol_failure"
           ? "kiro_retryable_protocol_failure"
           : declaredDisposition === "terminal_refusal"
@@ -940,16 +984,6 @@ export class KiroExecutor extends BaseExecutor {
         );
         return;
       }
-      if (state.toolValidationError) {
-        fail(
-          controller,
-          "invalid_tool_call",
-          "invalid_kiro_tool_call",
-          state.toolValidationError,
-          { transport_state: state.transportState, stop_disposition: "retryable_protocol_failure" }
-        );
-        return;
-      }
       try {
         emitTools(controller);
       } catch (error) {
@@ -958,6 +992,19 @@ export class KiroExecutor extends BaseExecutor {
           "invalid_tool_call",
           "invalid_kiro_tool_call",
           error.message,
+          { transport_state: state.transportState, stop_disposition: "retryable_protocol_failure" }
+        );
+        return;
+      }
+      // 0.5.165 — a rejected tool is fatal only when nothing usable is left. This
+      // runs AFTER emitTools(), which drops just the unusable calls; a turn that
+      // also produced text or a valid call keeps it (upstream b44bb09f).
+      if (state.toolValidationError && !state.hasToolCalls && !hasSemanticOutput()) {
+        fail(
+          controller,
+          "invalid_tool_call",
+          "invalid_kiro_tool_call",
+          state.toolValidationError,
           { transport_state: state.transportState, stop_disposition: "retryable_protocol_failure" }
         );
         return;
@@ -976,7 +1023,9 @@ export class KiroExecutor extends BaseExecutor {
       }
 
       const disposition = stopDisposition(state.stopReason, state.hasToolCalls);
-      if (["retryable_protocol_failure", "terminal_incomplete", "terminal_refusal", "unknown_failure"].includes(disposition)) {
+      const truncatedAfterOutput = isTruncatedAfterOutput(disposition);
+      if (!truncatedAfterOutput &&
+          ["retryable_protocol_failure", "terminal_incomplete", "terminal_refusal", "unknown_failure"].includes(disposition)) {
         const code = disposition === "retryable_protocol_failure"
           ? "kiro_retryable_protocol_failure"
           : disposition === "terminal_refusal"
@@ -1014,18 +1063,23 @@ export class KiroExecutor extends BaseExecutor {
         state.totalContentLength += held.text.length;
         emitDelta(controller, { content: held.text });
       }
-      const finishReason = state.hasToolCalls
-        ? "tool_calls"
-        : disposition === "length"
-          ? "length"
-          : "stop";
+      const finishReason = truncatedAfterOutput
+        ? "length"
+        : state.hasToolCalls
+          ? "tool_calls"
+          : disposition === "length"
+            ? "length"
+            : "stop";
       controller.enqueue(sseChunk({}, finishReason, state.usage));
       controller.enqueue(encoder.encode(SSE_DONE));
       state.finished = true;
       options.onTerminalState?.(diagnostics({
         terminal_provenance: state.terminalProvenance || "clean_eventstream_eof",
         transport_state: state.transportState,
-        stop_disposition: disposition
+        // 0.5.165 — report what this exit did: the integrity gate re-derives its
+        // verdict from stop_disposition, and "terminal_incomplete" would make it
+        // discard the turn we just kept (upstream b44bb09f).
+        stop_disposition: truncatedAfterOutput ? "length" : disposition
       }));
     };
 

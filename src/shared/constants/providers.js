@@ -15,7 +15,9 @@ export const FREE_PROVIDERS = {
   qoder: { id: "qoder", alias: "qd", name: "Qoder", icon: "water_drop", color: "#EC4899", deprecated: true, deprecationNotice: RISK_NOTICE, website: "https://qoder.com", notice: { signupUrl: "https://qoder.com" } },
   // iflow: { id: "iflow", alias: "if", name: "iFlow AI", icon: "water_drop", color: "#6366F1", website: "https://iflow.cn", notice: { signupUrl: "https://iflow.cn" } },
   opencode: { id: "opencode", alias: "oc", name: "OpenCode Free", icon: "terminal", color: "#E87040", textIcon: "OC", noAuth: true, passthroughModels: true, modelsFetcher: { url: "https://opencode.ai/zen/v1/models", type: "opencode-free" } },
-  "mimo-free": { id: "mimo-free", alias: "mmf", name: "MiMo Code Free", icon: "smart_toy", color: "#FF6900", textIcon: "MF", noAuth: true, passthroughModels: true, modelsFetcher: { url: "https://models.dev/api.json", type: "mimo-free" } },
+  // 0.5.165 — Xiaomi ended the free MiMo channel (upstream 6d96e24b): hidden from
+  // the provider lists; the alias stays so existing mmf/ routes still resolve.
+  "mimo-free": { id: "mimo-free", alias: "mmf", name: "MiMo Code Free", icon: "smart_toy", color: "#FF6900", textIcon: "MF", noAuth: true, hidden: true, passthroughModels: true, modelsFetcher: { url: "https://models.dev/api.json", type: "mimo-free" } },
 };
 
 // Free Tier Providers (has free access but may require account/API key)
@@ -67,7 +69,10 @@ export const OAUTH_PROVIDERS = {
   // image generation via the gemini-*-image models (upstream 5306bd90).
   antigravity: { id: "antigravity", alias: "ag", name: "Antigravity", icon: "rocket_launch", color: "#F59E0B", deprecated: true, deprecationNotice: "⚠️ Risk Notice: This provider uses a subscription/OAuth session not officially licensed for proxy/router use. Account may be restricted or banned. Use at your own risk.", website: "https://antigravity.google", notice: { signupUrl: "https://antigravity.google" }, serviceKinds: ["llm", "image"] },
   codex: { id: "codex", alias: "cx", name: "OpenAI Codex", icon: "code", color: "#3B82F6", deprecated: true, deprecationNotice: RISK_NOTICE, thinkingConfig: THINKING_CONFIG.effort, serviceKinds: ["llm", "image"], kindNotice: { image: "Requires a ChatGPT Plus (or higher) account. Free accounts are not supported for image generation." }, website: "https://chatgpt.com/codex", notice: { signupUrl: "https://chatgpt.com/codex" } },
-  github: { id: "github", alias: "gh", name: "GitHub Copilot", icon: "code", color: "#333333", deprecated: true, deprecationNotice: RISK_NOTICE, serviceKinds: ["llm", "embedding"], embeddingConfig: { baseUrl: "https://models.github.ai/inference/embeddings", authType: "apikey", authHeader: "bearer", models: [{ id: "text-embedding-3-small", name: "Text Embedding 3 Small (GitHub)", dimensions: 1536 }, { id: "text-embedding-3-large", name: "Text Embedding 3 Large (GitHub)", dimensions: 3072 }] }, website: "https://github.com/features/copilot", notice: { signupUrl: "https://github.com/features/copilot" } },
+  // 0.5.165 — models.github.ai was retired on 2026-07-30 (upstream 51a1827e);
+  // Copilot embeddings now live on api.githubcopilot.com, which serves
+  // text-embedding-ada-002 in place of 3-large.
+  github: { id: "github", alias: "gh", name: "GitHub Copilot", icon: "code", color: "#333333", deprecated: true, deprecationNotice: RISK_NOTICE, serviceKinds: ["llm", "embedding"], embeddingConfig: { baseUrl: "https://api.githubcopilot.com/embeddings", authType: "apikey", authHeader: "bearer", models: [{ id: "text-embedding-3-small", name: "Text Embedding 3 Small (GitHub)", dimensions: 1536 }, { id: "text-embedding-ada-002", name: "Text Embedding Ada 002 (GitHub)", dimensions: 1536 }] }, website: "https://github.com/features/copilot", notice: { signupUrl: "https://github.com/features/copilot" } },
   cursor: { id: "cursor", alias: "cu", name: "Cursor IDE", icon: "edit_note", color: "#00D4AA", website: "https://cursor.com", notice: { signupUrl: "https://cursor.com" } },
   xai: { id: "xai", alias: "xai", name: "xAI (Grok)", icon: "auto_awesome", color: "#1DA1F2", textIcon: "XA", website: "https://x.ai", notice: { apiKeyUrl: "https://console.x.ai", signupUrl: "https://x.ai" }, serviceKinds: ["llm", "imageToText", "webSearch", "image", "video"], searchViaChat: { defaultModel: "grok-4.20-reasoning", pricingUrl: "https://x.ai/api#pricing" }, authModes: ["oauth", "apikey"], hasOAuth: true },
   // "kimi-coding": { id: "kimi-coding", alias: "kmc", name: "Kimi Coding", icon: "psychology", color: "#1E40AF", textIcon: "KC" },
@@ -145,7 +150,10 @@ export const APIKEY_PROVIDERS = {
   "voyage-ai": { id: "voyage-ai", alias: "voyage", name: "Voyage AI", icon: "data_array", color: "#0EA5E9", textIcon: "VG", website: "https://www.voyageai.com", notice: { apiKeyUrl: "https://dash.voyageai.com/api-keys" }, serviceKinds: ["embedding"], embeddingConfig: { baseUrl: "https://api.voyageai.com/v1/embeddings", authType: "apikey", authHeader: "bearer", models: [{ id: "voyage-3-large", name: "Voyage 3 Large", dimensions: 1024 }, { id: "voyage-3.5", name: "Voyage 3.5", dimensions: 1024 }, { id: "voyage-3.5-lite", name: "Voyage 3.5 Lite", dimensions: 1024 }, { id: "voyage-code-3", name: "Voyage Code 3", dimensions: 1024 }, { id: "voyage-finance-2", name: "Voyage Finance 2", dimensions: 1024 }, { id: "voyage-law-2", name: "Voyage Law 2", dimensions: 1024 }, { id: "voyage-multilingual-2", name: "Voyage Multilingual 2", dimensions: 1024 }] } },
   sdwebui: { id: "sdwebui", alias: "sdwebui", name: "SD WebUI", icon: "brush", color: "#FF7043", textIcon: "SD", website: "https://github.com/AUTOMATIC1111/stable-diffusion-webui", serviceKinds: ["image"] },
   comfyui: { id: "comfyui", alias: "comfyui", name: "ComfyUI", icon: "account_tree", color: "#4CAF50", textIcon: "CF", website: "https://github.com/comfyanonymous/ComfyUI", serviceKinds: ["image"] },
-  huggingface: { id: "huggingface", alias: "hf", name: "HuggingFace", icon: "face", color: "#FFD21E", textIcon: "HF", website: "https://huggingface.co", notice: { apiKeyUrl: "https://huggingface.co/settings/tokens" }, serviceKinds: ["image", "imageToText", "tts", "stt"], hiddenKinds: ["tts"], ttsConfig: { baseUrl: "https://api-inference.huggingface.co/models", authType: "apikey", authHeader: "bearer", format: "huggingface-tts", models: [{ id: "facebook/mms-tts-eng", name: "MMS TTS English" }, { id: "microsoft/speecht5_tts", name: "SpeechT5 TTS" }] }, sttConfig: { baseUrl: "https://api-inference.huggingface.co/models", authType: "apikey", authHeader: "bearer", format: "huggingface-asr", models: [{ id: "openai/whisper-large-v3", name: "Whisper Large v3 (HF)" }, { id: "openai/whisper-small", name: "Whisper Small (HF)" }] } },
+  // 0.5.165 — api-inference.huggingface.co no longer resolves (ENOTFOUND);
+  // STT moves to the Inference Providers router's hf-inference ASR route and
+  // whisper-small is replaced by whisper-large-v3-turbo (upstream cf663f53).
+  huggingface: { id: "huggingface", alias: "hf", name: "HuggingFace", icon: "face", color: "#FFD21E", textIcon: "HF", website: "https://huggingface.co", notice: { apiKeyUrl: "https://huggingface.co/settings/tokens" }, serviceKinds: ["image", "imageToText", "tts", "stt"], hiddenKinds: ["tts"], ttsConfig: { baseUrl: "https://api-inference.huggingface.co/models", authType: "apikey", authHeader: "bearer", format: "huggingface-tts", models: [{ id: "facebook/mms-tts-eng", name: "MMS TTS English" }, { id: "microsoft/speecht5_tts", name: "SpeechT5 TTS" }] }, sttConfig: { baseUrl: "https://router.huggingface.co/hf-inference/models", authType: "apikey", authHeader: "bearer", format: "huggingface-asr", models: [{ id: "openai/whisper-large-v3", name: "Whisper Large v3 (HF)" }, { id: "openai/whisper-large-v3-turbo", name: "Whisper Large v3 Turbo (HF)" }] } },
   blackbox: { id: "blackbox", alias: "bb", name: "Blackbox AI", icon: "smart_toy", color: "#5B5FEF", textIcon: "BB", website: "https://blackbox.ai", notice: { apiKeyUrl: "https://www.blackbox.ai/api-management" }, serviceKinds: ["llm"] },
   chutes: { id: "chutes", alias: "ch", name: "Chutes AI", icon: "water_drop", color: "#ffffffff", textIcon: "CH", website: "https://chutes.ai", notice: { apiKeyUrl: "https://chutes.ai/app/api" } },
   // === Free-tier LLM providers (synced from OmniRoute) — DISABLED in UI ===
@@ -311,6 +319,10 @@ export const USAGE_SUPPORTED_PROVIDERS = [
   "minimax",
   "minimax-cn",
   "vercel-ai-gateway",
+  // 0.5.165 — usage.js has carried an opencode-go quota handler since 0.5.155, but
+  // isUsageEligible() filters connections on these two lists, so the quota page
+  // never called it. The provider is API-key only, so it needs both.
+  "opencode-go",
 ];
 
 // Subset that uses apikey auth (still surfaced on quota page)
@@ -320,4 +332,5 @@ export const USAGE_APIKEY_PROVIDERS = [
   "minimax",
   "minimax-cn",
   "vercel-ai-gateway",
+  "opencode-go",
 ];

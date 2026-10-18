@@ -16,6 +16,14 @@ export const MODEL_PRICING = {
   // Cache reads are 0.05x input on Opus 5.5 and 0.025x on Fable 5.1.
   "claude-opus-5-5":              { input: 4.00,  output: 20.00, cached: 0.20,  reasoning: 20.00,  cache_creation: 5.00  },
   "claude-sonnet-5-5":            { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  },
+  // 0.5.165 — Antigravity's effort tiers are separate ids (upstream a07ed95b); they
+  // bill as the base model, not at the claude-*/claude-opus-* pattern rate.
+  "claude-opus-5-5-high":         { input: 4.00,  output: 20.00, cached: 0.20,  reasoning: 20.00,  cache_creation: 5.00  },
+  "claude-opus-5-5-medium":       { input: 4.00,  output: 20.00, cached: 0.20,  reasoning: 20.00,  cache_creation: 5.00  },
+  "claude-opus-5-5-low":          { input: 4.00,  output: 20.00, cached: 0.20,  reasoning: 20.00,  cache_creation: 5.00  },
+  "claude-sonnet-5-5-high":       { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  },
+  "claude-sonnet-5-5-medium":     { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  },
+  "claude-sonnet-5-5-low":        { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  },
   "claude-sonnet-5":              { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  },
   "claude-fable-5-1":             { input: 10.00, output: 50.00, cached: 0.25,  reasoning: 50.00,  cache_creation: 12.50 },
   "claude-fable-5":               { input: 10.00, output: 50.00, cached: 1.00,  reasoning: 50.00,  cache_creation: 12.50 },
@@ -60,10 +68,41 @@ export const MODEL_PRICING = {
   "gpt-5.3-codex-low":           { input: 4.00,  output: 16.00, cached: 2.00,  reasoning: 24.00,  cache_creation: 4.00  },
   "gpt-5.3-codex-none":          { input: 3.00,  output: 12.00, cached: 1.50,  reasoning: 18.00,  cache_creation: 3.00  },
   "gpt-5.3-codex-spark":         { input: 3.00,  output: 12.00, cached: 0.30,  reasoning: 12.00,  cache_creation: 3.00  },
-  "o1":                           { input: 15.00, output: 60.00, cached: 7.50,  reasoning: 90.00,  cache_creation: 15.00 },
+  // 0.5.165 — the GPT 5.6 and GPT-6 families kRouter now serves on cx. Rates are
+  // OpenAI's Standard short-context prices (developers.openai.com/api/docs/pricing,
+  // upstream ca6e8407 / 7878f53b); this table stores one rate per model, so the
+  // long-context tier is not represented. Without these rows the generic gpt-5*
+  // pattern billed 5.6 at GPT-5 rates and gpt-6-* matched nothing at all, so every
+  // GPT-6 request was recorded at $0.
+  "gpt-5.6-sol":                  { input: 5.00,  output: 30.00, cached: 0.50,  reasoning: 30.00,  cache_creation: 5.00  },
+  "gpt-5.6-terra":                { input: 2.50,  output: 15.00, cached: 0.25,  reasoning: 15.00,  cache_creation: 2.50  },
+  "gpt-5.6-luna":                 { input: 1.00,  output: 6.00,  cached: 0.10,  reasoning: 6.00,   cache_creation: 1.00  },
+  "gpt-5.6":                      { input: 2.50,  output: 15.00, cached: 0.25,  reasoning: 15.00,  cache_creation: 2.50  },
+  "gpt-6-astra":                  { input: 10.00, output: 50.00, cached: 1.00,  reasoning: 50.00,  cache_creation: 12.50 },
+  "gpt-6.1-sol":                  { input: 2.00,  output: 10.00, cached: 0.10,  reasoning: 10.00,  cache_creation: 2.50  },
+  "gpt-6-sol":                    { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  },
+  "gpt-6-luna":                   { input: 0.10,  output: 0.50,  cached: 0.01,  reasoning: 0.50,   cache_creation: 0.125 },
+  "o1":                         { input: 15.00, output: 60.00, cached: 7.50,  reasoning: 90.00,  cache_creation: 15.00 },
   "o1-mini":                      { input: 3.00,  output: 12.00, cached: 1.50,  reasoning: 18.00,  cache_creation: 3.00  },
 
   // === Gemini ===
+  // 0.5.165 — the Antigravity tier ladders (upstream 783e271c, 86694ed8, 70f15aa5,
+  // 29fc880e). Google prices 3.6/3.7/3.8 Flash the same across tiers and well above
+  // 2.5 Flash, so the generic gemini-*-flash pattern under-billed them 5x.
+  "gemini-4-argon":               { input: 2.00,  output: 12.00, cached: 0.25,  reasoning: 18.00,  cache_creation: 2.00  },
+  "gemini-4-argon-high":          { input: 2.00,  output: 12.00, cached: 0.25,  reasoning: 18.00,  cache_creation: 2.00  },
+  "gemini-3.8-flash":             { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.8-flash-high":        { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.8-flash-medium":      { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.8-flash-low":         { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.7-flash":             { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.7-flash-high":        { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.7-flash-medium":      { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.7-flash-low":         { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.6-flash":             { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.6-flash-high":        { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.6-flash-medium":      { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
+  "gemini-3.6-flash-low":         { input: 1.50,  output: 7.50,  cached: 0.15,  reasoning: 11.25,  cache_creation: 1.875 },
   "gemini-3-flash-preview":       { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  },
   "gemini-3-pro-preview":         { input: 2.00,  output: 12.00, cached: 0.25,  reasoning: 18.00,  cache_creation: 2.00  },
   "gemini-3.1-pro-low":           { input: 2.00,  output: 12.00, cached: 0.25,  reasoning: 18.00,  cache_creation: 2.00  },
@@ -101,6 +140,11 @@ export const MODEL_PRICING = {
   "deepseek-flash":               { input: 0.30,  output: 1.20,  cached: 0.006, reasoning: 1.20,   cache_creation: 0.30  },
   "deepseek-v4-flash":            { input: 0.30,  output: 1.20,  cached: 0.006, reasoning: 1.20,   cache_creation: 0.30  },
   "deepseek-v4-flash-vision-exp": { input: 0.30,  output: 1.20,  cached: 0.006, reasoning: 1.20,   cache_creation: 0.30  },
+  // 0.5.165 — the current Flash id (upstream 8e15f0bd). Without a row it fell to
+  // the old deepseek-v* 0.14/0.28 rate and under-billed by ~4x.
+  "deepseek-v4.1-flash":          { input: 0.30,  output: 1.20,  cached: 0.006, reasoning: 1.20,   cache_creation: 0.30  },
+  "deepseek-v4-1-flash":          { input: 0.30,  output: 1.20,  cached: 0.006, reasoning: 1.20,   cache_creation: 0.30  },
+  "deepseek-v4.1-flash:cloud":    { input: 0.30,  output: 1.20,  cached: 0.006, reasoning: 1.20,   cache_creation: 0.30  },
   "deepseek-v4-pro":              { input: 1.32,  output: 3.96,  cached: 0.044, reasoning: 3.96,   cache_creation: 1.32  },
   // 0.5.164 — catalog aliases of deepseek-v4-pro (thinking max / off); usage is
   // priced by catalog id, so without rows they fell to the old deepseek-v* rate.
@@ -179,6 +223,11 @@ export const PATTERN_PRICING = [
   { pattern: "gemini-*",        pricing: { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  } },
 
   // --- GPT (specific first, generic last) ---
+  // 0.5.165 — the review twins (gpt-6-sol-review, gpt-5.6-terra-review, ...) are the
+  // same upstream model, so they must land on the same rate as the base id instead of
+  // falling through to gpt-5* (or, for gpt-6-*, to no pattern at all → $0).
+  { pattern: "gpt-6*",          pricing: { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50  } },
+  { pattern: "gpt-5.6-*",       pricing: { input: 2.50,  output: 15.00, cached: 0.25,  reasoning: 15.00,  cache_creation: 2.50  } },
   { pattern: "gpt-5.3-*",       pricing: { input: 6.00,  output: 24.00, cached: 3.00,  reasoning: 36.00,  cache_creation: 6.00  } },
   { pattern: "gpt-5.2-*",       pricing: { input: 5.00,  output: 20.00, cached: 2.50,  reasoning: 30.00,  cache_creation: 5.00  } },
   { pattern: "gpt-5.1-*",       pricing: { input: 4.00,  output: 16.00, cached: 2.00,  reasoning: 24.00,  cache_creation: 4.00  } },

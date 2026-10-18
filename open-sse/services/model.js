@@ -1,3 +1,5 @@
+import { PROVIDER_MODELS } from "../config/providerModels.js";
+
 // Provider alias to ID mapping
 const ALIAS_TO_PROVIDER_ID = {
   cc: "claude",
@@ -272,6 +274,27 @@ export async function getModelInfoCore(modelStr, aliasesOrGetter) {
   };
 }
 
+// 0.5.165 — slug ranges that only exist behind backend-api/codex. The Codex CLI's
+// /model picker sends a bare id, and every `gpt-*` slug used to fall through to
+// provider "openai" below, so a user with a ChatGPT connection and no OpenAI API
+// key got "no credentials for provider: openai" (upstream 8f9ff44f, efc80ba2).
+//
+// Upstream claims the whole gpt-5.x / gpt-6.x range. kRouter cannot: its own
+// openai catalog still sells gpt-5.1, gpt-5.2 and the gpt-5.4 family, and those
+// must keep reaching the OpenAI API. So a match here only wins for a slug the
+// openai catalog does not own — see openaiCatalogOwns below.
+const CODEX_ONLY_MODEL_PATTERNS = [
+  /^codex-auto-review$/,
+  /^gpt-[56]\./,
+  /^gpt-6-/,
+  /^gpt-daybreak-/,
+  /^gpt-reserve/,
+];
+
+function openaiCatalogOwns(modelName) {
+  return (PROVIDER_MODELS.openai || []).some((entry) => entry.id.toLowerCase() === modelName);
+}
+
 /**
  * Infer provider from model name prefix
  * Used as fallback when no provider prefix or alias is given
@@ -281,6 +304,7 @@ function inferProviderFromModelName(modelName) {
   const m = modelName.toLowerCase();
   if (m.startsWith("claude-")) return "anthropic";
   if (m.startsWith("gemini-")) return "gemini";
+  if (CODEX_ONLY_MODEL_PATTERNS.some((p) => p.test(m)) && !openaiCatalogOwns(m)) return "codex";
   if (m.startsWith("gpt-")) return "openai";
   if (m.startsWith("o1") || m.startsWith("o3") || m.startsWith("o4"))
     return "openai";

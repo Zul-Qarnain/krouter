@@ -2,6 +2,10 @@ import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { adjustMaxTokens } from "../helpers/maxTokensHelper.js";
 
+// 0.5.165 — tool text when a tool_result carried only images; never empty (some
+// OpenAI-compatible validators reject an empty tool message) and never base64.
+const TOOL_RESULT_IMAGE_PLACEHOLDER = "(image attached below)";
+
 function stripAnthropicBillingHeader(text) {
   if (typeof text !== "string") return "";
   return text.replace(/^x-anthropic-billing-header:[^\n]*(?:\r?\n)?/i, "");
@@ -157,25 +161,43 @@ function convertClaudeMessage(msg) {
           });
           break;
 
-        case "tool_result":
+        case "tool_result": {
           let resultContent = "";
+          const resultImages = [];
           if (typeof block.content === "string") {
             resultContent = block.content;
           } else if (Array.isArray(block.content)) {
+            for (const c of block.content) {
+              if (c?.type === "image" && c.source?.type === "base64") {
+                resultImages.push({
+                  type: "image_url",
+                  image_url: { url: `data:${c.source.media_type};base64,${c.source.data}` }
+                });
+              }
+            }
             resultContent = block.content
-              .filter(c => c.type === "text")
+              .filter(c => c?.type === "text")
               .map(c => c.text)
-              .join("\n") || JSON.stringify(block.content);
+              .join("\n") || (resultImages.length ? TOOL_RESULT_IMAGE_PLACEHOLDER : JSON.stringify(block.content));
           } else if (block.content) {
             resultContent = JSON.stringify(block.content);
           }
-          
+
           toolResults.push({
             role: "tool",
             tool_call_id: block.tool_use_id,
             content: resultContent
           });
+          // 0.5.165 — the OpenAI tool role is text-only, so a screenshot an MCP tool
+          // returned was JSON-stringified into the tool text as base64. Hand it to
+          // the model in the user message that follows the tool messages, tagged
+          // with the call it came from (upstream f4f06f29).
+          if (resultImages.length) {
+            parts.push({ type: "text", text: `[Image from tool result ${block.tool_use_id}]` });
+            parts.push(...resultImages);
+          }
           break;
+        }
       }
     }
 

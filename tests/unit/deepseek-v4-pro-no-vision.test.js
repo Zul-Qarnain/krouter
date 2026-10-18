@@ -11,13 +11,17 @@ describe("deepseek-v4-pro is text-only", () => {
     expect(getCapabilitiesForModel(provider, "deepseek-v4-pro").vision).toBe(false);
   });
 
+  // 0.5.165 — thinkingCanDisable and maxOutput follow the gateway's 2026-09-30
+  // product-config snapshot (upstream 63de82b8). canDisableThinking is NOT the
+  // inverse of onlyReasoning: V4 Pro thinks by default but CAN be told not to, and
+  // its real output cap is 393216, not the 48000-era 50000 guess.
   it("keeps the rest of the CodeBuddy metadata", () => {
     expect(getCapabilitiesForModel("codebuddy-cn", "deepseek-v4-pro")).toMatchObject({
       reasoning: true,
       thinkingFormat: "openai",
-      thinkingCanDisable: false,
+      thinkingCanDisable: true,
       contextWindow: 1000000,
-      maxOutput: 50000,
+      maxOutput: 393216,
     });
   });
 });
