@@ -15,6 +15,11 @@ import { readFileSync } from "node:fs";
  *
  * The first port of this landed with the guard swapped and neither call site updated,
  * which read as "SSRF fixed" while both holes were open. These assert the wiring.
+ *
+ * The image paths were the same story a release later: _base.js's urlToBase64 was a
+ * bare fetch(url) reached from a client-supplied cloudflare-ai body.image and from a
+ * provider-supplied data[0].url, so it is asserted here for the same reason -- the
+ * next port of an image adapter should fail this test, not ship the hole again.
  */
 
 describe("SSRF guards are wired into the call sites", () => {
@@ -31,6 +36,40 @@ describe("SSRF guards are wired into the call sites", () => {
     expect(src).toContain("fetchPublic");
     expect(src).toMatch(/const resp = await fetchPublic\(url,/);
     expect(src).not.toMatch(/const resp = await fetch\(url,/);
+  });
+
+  it("the shared image reader guards the URL, bounds the request and caps the body", () => {
+    const src = readFileSync("open-sse/handlers/imageProviders/_base.js", "utf8");
+    // Both image callers hand this reader a URL they did not choose, so the guard,
+    // the timeout and the byte cap all have to live here -- a bare fetch(url) with
+    // the default redirect:"follow" was all three holes at once.
+    expect(src).toContain("fetchPublic");
+    expect(src).toMatch(/await fetchPublic\(url,/);
+    expect(src).not.toMatch(/await fetch\(url\)/);
+    expect(src).toMatch(/AbortSignal\.timeout\(/);
+    // The cap is counted off the stream, not read off a header -- that the sender
+    // cannot lie its way past it is asserted for real in image-source-url-ssrf.test.js.
+    expect(src).toMatch(/readCapped\(res, maxBytes\)/);
+    // One reader, not one per adapter.
+    expect(src.match(/export async function urlToBase64/g)).toHaveLength(1);
+  });
+
+  it("cloudflare-ai reads a client-supplied body.image through that reader, not its own fetch", () => {
+    const src = readFileSync("open-sse/handlers/imageProviders/cloudflareAi.js", "utf8");
+    // body.image is whatever the client posted, and /v1/images/generations is
+    // unauthenticated by default (requireApiKey is not in DEFAULT_SETTINGS) with no
+    // catalog check on the model string -- so this is the most exposed of the two.
+    expect(src).toMatch(/import \{[^}]*\burlToBase64\b[^}]*\} from "\.\/_base\.js"/);
+    expect(src).toMatch(/await urlToBase64\(trimmed\)/);
+    expect(src).not.toMatch(/\bfetch\(/);
+  });
+
+  it("the image core reads a provider-supplied data[0].url through that reader", () => {
+    const src = readFileSync("open-sse/handlers/imageGenerationCore.js", "utf8");
+    expect(src).toMatch(/import \{[^}]*\burlToBase64\b[^}]*\} from "\.\/imageProviders\/_base\.js"/);
+    // Both binaryOutput branches -- the executor-delegating one and the main one.
+    expect(src.match(/urlToBase64\(first\.url\)/g)).toHaveLength(2);
+    expect(src).not.toMatch(/fetch\(first\.url/);
   });
 
   it("the hardened guard still exports all three entry points", () => {
