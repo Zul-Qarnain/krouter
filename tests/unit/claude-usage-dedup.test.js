@@ -1,5 +1,23 @@
-import { describe, it, expect } from "vitest";
-import { getClaudeUsage } from "../../open-sse/services/usage.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// proxyAwareFetch is mocked because this file is about promise identity, not about
+// what Anthropic answers. Unmocked, getClaudeUsage reaches the real API: that
+// resolves quickly on a developer machine and hung past the 5s test timeout on CI,
+// which is a property of the runner's network rather than of the dedup contract.
+vi.mock("../../open-sse/utils/proxyFetch.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  proxyAwareFetch: vi.fn(),
+}));
+
+const { proxyAwareFetch } = await import("../../open-sse/utils/proxyFetch.js");
+const { getClaudeUsage } = await import("../../open-sse/services/usage.js");
+
+beforeEach(() => {
+  proxyAwareFetch.mockReset();
+  proxyAwareFetch.mockResolvedValue(
+    new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })
+  );
+});
 
 // upstream cd4003bc — several dashboard widgets ask for Claude quota at once;
 // without dedup each fired its own upstream request and tripped Anthropic's 429.
