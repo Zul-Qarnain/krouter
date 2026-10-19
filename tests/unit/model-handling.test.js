@@ -10,14 +10,17 @@ describe("modelDeprecation — resolveDeprecatedModel", () => {
   });
 
   it("upgrades bare deprecated models", () => {
-    expect(resolveDeprecatedModel("gemini-pro")).toBe("gemini-2.5-pro");
-    expect(resolveDeprecatedModel("gemini-1.5-flash")).toBe("gemini-2.5-flash");
+    // 0.5.166 — targets moved off gemini-2.5-*, which entered its retirement window on
+    // the partner platforms. See deprecation-aliases-point-at-live-models.test.js.
+    expect(resolveDeprecatedModel("gemini-pro")).toBe("gemini-4-argon");
+    expect(resolveDeprecatedModel("gemini-1.5-flash")).toBe("gemini-flash-latest");
     expect(resolveDeprecatedModel("mistral-large")).toBe("mistral-large-latest");
   });
 
   it("upgrades prefixed deprecated models and preserves the prefix", () => {
-    expect(resolveDeprecatedModel("ag/gemini-pro")).toBe("ag/gemini-2.5-pro");
-    expect(resolveDeprecatedModel("openai-compatible-foo/gpt-4-1106-preview")).toBe("openai-compatible-foo/gpt-4-turbo");
+    expect(resolveDeprecatedModel("ag/gemini-pro")).toBe("ag/gemini-4-argon");
+    // 0.5.166 — was gpt-4-turbo, which OpenAI shuts down 2026-10-23.
+    expect(resolveDeprecatedModel("openai-compatible-foo/gpt-4-1106-preview")).toBe("openai-compatible-foo/gpt-5.4");
   });
 
   it("handles replacements that already include a slash (e.g. Fireworks to Moonshot)", () => {
