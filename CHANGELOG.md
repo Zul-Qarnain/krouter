@@ -1,3 +1,136 @@
+# v0.5.166 (2026-10-19) — the upstream sync: Zenith stops preferring your last account, strict proxy pools stop leaking, and Claude, Codex, Gemini and Kiro requests stop being rejected
+
+**The largest sync this fork has done.** 369 upstream commits (9router v0.5.50 → v0.5.104) were
+triaged one by one against this fork's code, then ported in reviewed batches with a test each.
+58 were already fixed here, 60 do not apply to this fork's structure, and the rest landed as the
+fixes below. 99 new tests; the suite is 3,438.
+
+**Everyone with more than one account on a provider: upgrade.** Zenith, the default routing engine,
+was meant to pick the healthiest account and did the opposite. An account whose provider reports no
+quota — almost every API-key account — was scored as if it had none left, cutting its health to a
+tenth, and the list-position bonus ran backwards, so the bottom account won. Traffic drifted to the
+last account in your list.
+
+**Anyone using a strict proxy pool: upgrade.** A strict pool that was inactive, had no URL, or
+failed to load sent the request over your real IP instead of refusing it, and the flag that triggers
+the refusal was never passed to chat requests at all, so strict mode had never worked there. Token
+refreshes went direct too, carrying the refresh token to the provider from your own address.
+
+## Security
+
+- **Strict proxy pools now fail closed.** A pool that cannot be used blocks the request rather than
+  falling back to a direct connection — including Cursor's HTTP/2 path, and the MITM-bypass hosts
+  that dialled the real IP by hand. Token refreshes now go through the connection's proxy.
+- **A revoked refresh token is no longer retried forever.** Quota auto-ping re-sent a rejected Codex
+  refresh token every 60 seconds, which is the behaviour upstream blames for accounts being logged
+  out. It now stops after the first rejection and resumes by itself when you reconnect.
+- **Codex refresh-token reuse.** A 5-day refresh lead plus three writers working from stale snapshots
+  could log an account out. Refreshers now re-read from the database first and adopt a newer token.
+- **An API key with a name already in the pool answers 409** instead of silently overwriting the
+  stored key. The dashboard shows the message instead of a dialog that appears to do nothing.
+- **Image and speech model ids are validated** before they reach a provider URL (`hf-stt`), and the
+  MCP bridge's local-only gate is pinned by a test: those routes spawn a plugin and write caller
+  JSON to its stdin.
+
+## Routing and errors
+
+- **Zenith picks the healthiest account again.** Unknown quota is no longer a penalty, and the
+  list-position bonus favours the top of your list (40, 30, 20, 10 for the first four, nothing
+  below). The dashboard's Zenith view uses the same numbers the router does.
+- **A reset time the provider names now wins over the 90-second guess.** The per-minute downgrade
+  used to override a precise reset because the quota cache fails open when it is cold.
+- **A request-scoped 4xx no longer cools the account down.** A bad request is yours, not the
+  account's; other accounts are not tried and the combo still advances.
+- **A busy 503 gets the short doubling backoff**, not a flat 30 seconds.
+- **Anthropic's monthly spend cap and a spend limit you set** hold the whole account until the date
+  Anthropic names, instead of being retried every few minutes for the rest of the month.
+- **OpenRouter's free-model daily cap** parks that model until the reset it names (or 00:00 UTC)
+  rather than being read as a per-minute limit and retried every 90 seconds until midnight.
+- **An expired per-model cooldown no longer hides an account-wide lock**, and the dashboard timer
+  shows the lock that is actually in force.
+- **Gemini CLI's `retryDelay` now sets the lock**; it was parsed and then ignored.
+- **A combo now sees `Retry-After`**, falls through when an entry answers 200 with nothing in it, and
+  treats attachment capability as a hard partition: a text-only entry can no longer jump ahead of
+  the entry that can read your image because it has quota data.
+- **Every account rate-limited answers 503** rather than a confusing per-model error.
+
+## Clients
+
+- **Claude Code:** the spoofed CLI version keeps up with Opus 5.5 (a stale one is a 400, not a
+  cosmetic detail); always-thinking models no longer receive a disabled-thinking or forced
+  `tool_choice` body they reject; message-shape cleanups Anthropic rejects; the session id header
+  matches the user id. A tool name whose map was lost mid-stream is still decloaked — but only on
+  requests kRouter actually cloaked, so a client tool whose own name ends in the suffix is never
+  renamed.
+- **Codex:** GPT-6 Sol/Luna use the Responses-Lite shape; one CLI version is used everywhere;
+  `gpt-image-*` runs on a chat model with the image model in `image_generation`; bare `gpt-*` slugs
+  from the model picker route to Codex instead of answering "no credentials for openai"; a
+  ChatGPT-unsupported model falls back; `\p{...}` schema patterns are stripped; a Codex client no
+  longer passes through untranslated to the `openai` provider.
+- **Cline:** Apply keeps `/v1` on the base URL (every request used to 404), writes the providers file
+  the CLI actually reads, sets the Act-mode model, rejects a non-http(s) URL and stores the key
+  owner-only. Reset removes only the entry kRouter wrote. ClinePass `clp_` keys are no longer given a
+  `workos:` prefix that earned a 401.
+- **Continue:** the setup guide uses `config.yaml`, with how to merge into the `models: []` file
+  Continue creates on first run.
+- **Claude Code card:** Reset removes the Max context override it wrote.
+- **Grok CLI** reports a version the proxy accepts (0.2.99 earned a 426).
+- **Kiro:** tool-only turns are billed, only invalid tools are dropped rather than all of them,
+  truncated output is kept, and a repair retry no longer writes a top-level system prompt that
+  Kiro rejects outright.
+- **CLI tool cards write a real dashboard key** instead of a placeholder that 401s when
+  Require API key is on.
+
+## Providers and models
+
+- **Claude:** both providers lead with Opus 5.5, Sonnet 5.5, Fable 5.1 and Haiku 4.5, with correct
+  context (1M), output (128K) and prices; the `anthropic` provider listed only retired models.
+- **Deprecation aliases point at live models.** Five Claude aliases landed on models retired in June
+  2026 and October 2025, and four OpenAI aliases on `gpt-4-turbo` and `gpt-3.5-turbo`, which shut
+  down on 23 October 2026 — so the alias meant to rescue a hardcoded id returned a second 404.
+- **MiMo Free is hidden.** The channel stopped answering, and it was the implicit default for the
+  vision pool, so a screenshot sent to a text-only model spent two failed calls before the real
+  model was tried. An empty pool now does nothing instead.
+- **DeepSeek** V4 Pro is not vision-capable, and prices follow the August 2026 repricing; the two
+  V4 Pro aliases had no price row of their own and billed at an older, much lower rate.
+- **OpenCode Go:** Qwen models go to the Messages endpoint where OpenCode serves them, Space Bunny
+  uses its current id, and the price note reads $10/month, or $40 for Go Plus.
+- **OpenCode Free** works again, on the current inference endpoint.
+- **Antigravity:** the `agent` request type that caused false 429s is gone; catalog tiers, quota rows
+  and the billing-header rewrites are current.
+- **Gemini:** one content normaliser, unique tool-call ids across history, and schema keywords Gemini
+  rejects are stripped.
+- **HuggingFace image and STT** move to the router endpoint, and **Copilot embeddings** off the
+  retired models host.
+- **CodeBuddy CN** stops forcing a reasoning level that tripped its own content filter, clamps a
+  level the model does not publish, and reports a frequency limit as a 429 so failover happens.
+
+## Streaming
+
+- **A stream that stalls or loses its upstream after HTTP 200 now ends with an error frame** instead
+  of closing silently, for OpenAI and Claude clients alike.
+- **Responses:** `response.completed` carries usage and output items, so Codex CLI and Copilot CLI
+  work; `max_tokens` maps to `max_output_tokens` and `reasoning_effort` to `reasoning`; input is
+  validated strictly; a refusal maps to `content_filter`.
+- **Literal `<think></think>` markers are no longer sent to clients.**
+- **A Cline envelope is unwrapped** before anything reads choices or usage.
+
+## Usage and dashboard
+
+- **Per-key usage is attributed to the key.** Every key collapsed into one bucket.
+- Ollama cached tokens are counted, image usage reaches the usage table, hidden providers are hidden
+  in the filter, and the full-table scan behind "last used" is bounded.
+- Settings describes routing as it works: the default is labelled Zenith, round robin does not pin a
+  conversation to one account, and Antigravity uses round robin by default.
+
+## Also
+
+- Turning on Tailscale Funnel returns in about 20 seconds instead of hanging for three minutes.
+- The skills docs point to Endpoint → API Keys, say a key is needed under Docker too, and link the
+  right branch.
+- **Behaviour change:** a key added through the bundled CLI, or any API call that sends no priority,
+  now lands at the end of the pool instead of the front.
+
 # v0.5.165 (2026-10-18) — the image URLs you pass, and the ones providers hand back, are checked before kRouter fetches them
 
 **If your kRouter is reachable by anyone but you, upgrade.** The image endpoints fetched URLs
