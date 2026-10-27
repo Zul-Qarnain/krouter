@@ -4,6 +4,7 @@ import { CLI_TOKEN_HEADER, hasValidCliToken } from "@/lib/auth/cliToken";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 import { checkApiAuthLock, recordApiAuthFail, recordApiAuthSuccess } from "@/lib/auth/apiAuthLimiter";
 import { getClientIp } from "@/lib/auth/loginLimiter";
+import { auth, getBetterAuth, isBetterAuthConfigured } from "@/auth";
 
 import { getTrustedPeerIp, isLoopbackIp } from "@/lib/auth/trustedPeer";
 
@@ -13,10 +14,7 @@ const PUBLIC_API_PATHS = [
   "/api/health",
   "/api/init",
   "/api/locale",
-  "/api/auth/login",
-  "/api/auth/logout",
-  "/api/auth/status",
-  "/api/auth/oidc",
+  "/api/auth",
   "/api/version",
   "/api/settings/require-login",
 ];
@@ -185,15 +183,46 @@ function lockedResponse(retryAfter) {
   return res;
 }
 
+export async function getBetterAuthSession(request) {
+  if (!isBetterAuthConfigured()) return null;
+  try {
+    const authInstance = getBetterAuth() || auth;
+    if (!authInstance?.api?.getSession) return null;
+    return await authInstance.api.getSession({
+      headers: request.headers,
+    });
+  } catch {
+    return null;
+  }
+}
+
+export function isUserBanned(user) {
+  if (!user || !user.banned) return false;
+  if (user.banExpires) {
+    const expires = new Date(user.banExpires);
+    if (!isNaN(expires.getTime()) && expires.getTime() <= Date.now()) {
+      return false; // Ban expired
+    }
+  }
+  return true;
+}
+
 async function canAccessLocalOnlyRoute(request) {
   if (await hasValidCliToken(request)) return true;
-  // Browser on host: loopback Host + Origin (blocks tunnel/CSRF) + auth (JWT or requireLogin=false)
-  if (isLocalRequest(request) && await isAuthenticated(request)) return true;
+  // Browser on host: loopback Host + Origin (blocks tunnel/CSRF) + auth
+  if (!isLocalRequest(request)) return false;
+
+  const betterSession = await getBetterAuthSession(request);
+  if (betterSession?.user) {
+    return !isUserBanned(betterSession.user) && betterSession.user.role === "admin";
+  }
+  if (await hasValidToken(request)) return true;
+  if (!isBetterAuthConfigured() && await isAuthenticated(request)) return true;
   return false;
 }
 
 async function hasValidToken(request) {
-  const token = request.cookies.get("auth_token")?.value;
+  const token = request.cookies?.get?.("auth_token")?.value;
   return await verifyDashboardAuthToken(token);
 }
 
@@ -205,6 +234,10 @@ async function hasValidToken(request) {
  * latter makes every caller look authenticated.
  */
 export async function hasRealDashboardSession(request) {
+  const betterSession = await getBetterAuthSession(request);
+  if (betterSession?.user) {
+    return !isUserBanned(betterSession.user) && betterSession.user.role === "admin";
+  }
   return await hasValidToken(request);
 }
 
@@ -263,6 +296,8 @@ export const __test__ = {
   extractApiKey,
   canAccessPublicLlmApi,
   canAccessLocalOnlyRoute,
+  getBetterAuthSession,
+  isUserBanned,
 };
 
 export async function proxy(request) {
@@ -296,9 +331,26 @@ export async function proxy(request) {
     noteAuthResult(true);
   }
 
-  // Always protected - require valid JWT or local CLI token (machineId-based)
+  // Always protected - require valid JWT or local CLI token (machineId-based) or Better Auth admin
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
-    if (await hasValidCliToken(request) || await hasValidToken(request)) {
+    if (await hasValidCliToken(request)) {
+      noteAuthResult(true);
+      return NextResponse.next();
+    }
+    const betterSession = await getBetterAuthSession(request);
+    if (betterSession?.user) {
+      if (isUserBanned(betterSession.user)) {
+        noteAuthResult(false);
+        return NextResponse.json({ error: "Forbidden: Account is suspended" }, { status: 403 });
+      }
+      if (betterSession.user.role === "admin") {
+        noteAuthResult(true);
+        return NextResponse.next();
+      }
+      noteAuthResult(false);
+      return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
+    }
+    if (await hasValidToken(request)) {
       noteAuthResult(true);
       return NextResponse.next();
     }
@@ -326,7 +378,28 @@ export async function proxy(request) {
     if (await isTunnelDashboardBlocked(request)) {
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
     }
-    if (await hasValidCliToken(request) || await isAuthenticated(request)) {
+    if (await hasValidCliToken(request)) {
+      noteAuthResult(true);
+      return NextResponse.next();
+    }
+    const betterSession = await getBetterAuthSession(request);
+    if (betterSession?.user) {
+      if (isUserBanned(betterSession.user)) {
+        noteAuthResult(false);
+        return NextResponse.json({ error: "Forbidden: Account is suspended" }, { status: 403 });
+      }
+      if (betterSession.user.role === "admin") {
+        noteAuthResult(true);
+        return NextResponse.next();
+      }
+      noteAuthResult(false);
+      return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
+    }
+    if (await hasValidToken(request)) {
+      noteAuthResult(true);
+      return NextResponse.next();
+    }
+    if (!isBetterAuthConfigured() && await isAuthenticated(request)) {
       noteAuthResult(true);
       return NextResponse.next();
     }
@@ -336,40 +409,53 @@ export async function proxy(request) {
 
   // Protect all dashboard routes
   if (pathname.startsWith("/dashboard")) {
-    let requireLogin = true;
-    let tunnelDashboardAccess = true;
-
-    try {
-      const settings = await loadSettings();
-      if (settings) {
-        requireLogin = settings.requireLogin !== false;
-        tunnelDashboardAccess = settings.tunnelDashboardAccess === true;
-
-        // Block tunnel/tailscale access if disabled (redirect to login)
-        if (!tunnelDashboardAccess) {
-          const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
-          const tunnelHost = settings.tunnelUrl ? new URL(settings.tunnelUrl).hostname.toLowerCase() : "";
-          const tailscaleHost = settings.tailscaleUrl ? new URL(settings.tailscaleUrl).hostname.toLowerCase() : "";
-          if ((tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost)) {
-            return NextResponse.redirect(new URL("/login", request.url));
-          }
-        }
+    const betterSession = await getBetterAuthSession(request);
+    if (betterSession?.user) {
+      if (isUserBanned(betterSession.user)) {
+        return NextResponse.redirect(new URL("/login?error=banned", request.url));
       }
-    } catch {
-      // On error, keep defaults (require login, block tunnel)
+      if (betterSession.user.role === "admin") {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/login?error=admin_required", request.url));
     }
 
-    // If login not required, allow through
-    if (!requireLogin) return NextResponse.next();
-
     // Verify JWT token
-    const token = request.cookies.get("auth_token")?.value;
+    const token = request.cookies?.get?.("auth_token")?.value;
     if (token) {
       if (await verifyDashboardAuthToken(token)) {
         return NextResponse.next();
       } else {
         return NextResponse.redirect(new URL("/login", request.url));
       }
+    }
+
+    if (!isBetterAuthConfigured()) {
+      let requireLogin = true;
+      let tunnelDashboardAccess = true;
+
+      try {
+        const settings = await loadSettings();
+        if (settings) {
+          requireLogin = settings.requireLogin !== false;
+          tunnelDashboardAccess = settings.tunnelDashboardAccess === true;
+
+          // Block tunnel/tailscale access if disabled (redirect to login)
+          if (!tunnelDashboardAccess) {
+            const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
+            const tunnelHost = settings.tunnelUrl ? new URL(settings.tunnelUrl).hostname.toLowerCase() : "";
+            const tailscaleHost = settings.tailscaleUrl ? new URL(settings.tailscaleUrl).hostname.toLowerCase() : "";
+            if ((tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost)) {
+              return NextResponse.redirect(new URL("/login", request.url));
+            }
+          }
+        }
+      } catch {
+        // On error, keep defaults (require login, block tunnel)
+      }
+
+      // If login not required, allow through
+      if (!requireLogin) return NextResponse.next();
     }
 
     return NextResponse.redirect(new URL("/login", request.url));

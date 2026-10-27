@@ -8,5 +8,7 @@ export async function POST() {
   cookieStore.delete("oidc_state");
   cookieStore.delete("oidc_nonce");
   cookieStore.delete("oidc_code_verifier");
+  cookieStore.delete("better-auth.session_token");
+  cookieStore.delete("__Secure-better-auth.session_token");
   return NextResponse.json({ success: true });
 }

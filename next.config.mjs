@@ -20,7 +20,7 @@ const nextConfig = {
   // URL path must be absolute" — no drive letter) at module scope — killing every
   // importer, including xAI/Grok/Codex token refresh. External keeps the real
   // import.meta.url at runtime.
-  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open"],
+  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "open", "pg"],
   turbopack: {
     root: tracingRoot
   },

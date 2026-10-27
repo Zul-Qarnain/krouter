@@ -1,26 +1,57 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getSettings } from "@/lib/localDb";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
+import { auth, getBetterAuth, isBetterAuthConfigured } from "@/auth";
 
 export async function GET() {
   try {
     const settings = await getSettings();
     const cookieStore = await cookies();
-    const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value);
+    const reqHeaders = await headers();
+    let betterSession = null;
+
+    if (isBetterAuthConfigured()) {
+      try {
+        const authInstance = getBetterAuth() || auth;
+        if (authInstance?.api?.getSession) {
+          betterSession = await authInstance.api.getSession({
+            headers: reqHeaders,
+          });
+        }
+      } catch {}
+    }
+
+    const legacySession = await getDashboardAuthSession(cookieStore.get("auth_token")?.value);
     const requireLogin = settings.requireLogin !== false;
     const authMode = settings.authMode || "password";
-    const oidcName = String(session?.oidcName || "").trim();
-    const oidcEmail = String(session?.oidcEmail || "").trim();
-    const displayName = oidcName || oidcEmail || (session?.oidc ? "OIDC user" : "Password user");
-    const loginMethod = session?.oidc ? "OIDC" : "Password";
+
+    const isBanned = Boolean(betterSession?.user?.banned);
+    const isBetterAuthAdmin = Boolean(betterSession?.user && !isBanned && betterSession.user.role === "admin");
+    const isAuthenticated = isBetterAuthAdmin || Boolean(legacySession);
+
+    const oidcName = String(legacySession?.oidcName || "").trim();
+    const oidcEmail = String(legacySession?.oidcEmail || "").trim();
+
+    let displayName = "Password user";
+    let loginMethod = "Password";
+
+    if (betterSession?.user) {
+      displayName = betterSession.user.name || betterSession.user.email || "Better Auth user";
+      loginMethod = "Better Auth";
+    } else if (legacySession?.oidc) {
+      displayName = oidcName || oidcEmail || "OIDC user";
+      loginMethod = "OIDC";
+    }
 
     return NextResponse.json({
       requireLogin,
-      // 0.5.121 (upstream ae4f76c4) — expose auth state so /login can bounce an
-      // already-logged-in user to the dashboard.
-      authenticated: !!session,
+      authenticated: isAuthenticated,
+      betterAuthConfigured: isBetterAuthConfigured(),
+      betterAuthUser: Boolean(betterSession?.user),
+      role: betterSession?.user?.role || (legacySession ? "admin" : null),
+      banned: isBanned,
       authMode,
       oidcConfigured: isOidcConfigured(settings),
       oidcLoginLabel: (settings.oidcLoginLabel || "Sign in with OIDC").trim() || "Sign in with OIDC",
@@ -29,12 +60,16 @@ export async function GET() {
       loginMethod,
       oidcName: oidcName || null,
       oidcEmail: oidcEmail || null,
-      oidcLogin: !!session?.oidc,
+      oidcLogin: !!legacySession?.oidc,
     });
   } catch {
     return NextResponse.json({
       requireLogin: true,
       authenticated: false,
+      betterAuthConfigured: isBetterAuthConfigured(),
+      betterAuthUser: false,
+      role: null,
+      banned: false,
       authMode: "password",
       oidcConfigured: false,
       oidcLoginLabel: "Sign in with OIDC",

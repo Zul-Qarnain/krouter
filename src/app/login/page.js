@@ -3,9 +3,16 @@
 import { useState, useEffect } from "react";
 import { Card, Button, Input } from "@/shared/components";
 import { useRouter } from "next/navigation";
+import { authClient } from "@/auth-client";
 
 export default function LoginPage() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [legacyPassword, setLegacyPassword] = useState("");
+  const [activeTab, setActiveTab] = useState("signin"); // "signin" | "signup"
+  const [useLegacy, setUseLegacy] = useState(false);
+
   const [error, setError] = useState("");
   const [resetHint, setResetHint] = useState("");
   const [retryAfter, setRetryAfter] = useState(0);
@@ -14,7 +21,21 @@ export default function LoginPage() {
   const [authMode, setAuthMode] = useState("password");
   const [oidcConfigured, setOidcConfigured] = useState(false);
   const [oidcLoginLabel, setOidcLoginLabel] = useState("Sign in with OIDC");
+  const [betterAuthConfigured, setBetterAuthConfigured] = useState(false);
+
   const router = useRouter();
+
+  // Read error param from URL on client (e.g., admin_required, banned)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const errParam = params.get("error");
+    if (errParam === "admin_required") {
+      setError("Admin access required. Ordinary user accounts cannot access the admin dashboard.");
+    } else if (errParam === "banned") {
+      setError("Access denied: This account has been suspended.");
+    }
+  }, []);
 
   // Countdown for rate-limit
   useEffect(() => {
@@ -37,7 +58,7 @@ export default function LoginPage() {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.authenticated === true || data.requireLogin === false) {
+          if (data.authenticated === true || (data.requireLogin === false && !data.betterAuthConfigured)) {
             router.push("/dashboard");
             router.refresh();
             return;
@@ -46,8 +67,8 @@ export default function LoginPage() {
           setAuthMode(data.authMode || "password");
           setOidcConfigured(data.oidcConfigured === true);
           setOidcLoginLabel(data.oidcLoginLabel || "Sign in with OIDC");
+          setBetterAuthConfigured(data.betterAuthConfigured === true);
         } else {
-          // Safe fallback on non-OK response to avoid infinite loading state.
           setHasPassword(true);
         }
       } catch (err) {
@@ -58,7 +79,59 @@ export default function LoginPage() {
     checkAuth();
   }, [router]);
 
-  const handleLogin = async (e) => {
+  // Better Auth Sign In
+  const handleBetterAuthSignIn = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const { data, error } = await authClient.signIn.email({
+        email,
+        password,
+      });
+
+      if (error) {
+        setError(error.message || "Invalid email or password");
+      } else {
+        router.push("/dashboard");
+        router.refresh();
+      }
+    } catch (err) {
+      setError("An error occurred during sign-in. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Better Auth Sign Up
+  const handleBetterAuthSignUp = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const { data, error } = await authClient.signUp.email({
+        email,
+        password,
+        name: name.trim() || email.split("@")[0],
+      });
+
+      if (error) {
+        setError(error.message || "Failed to create account");
+      } else {
+        router.push("/dashboard");
+        router.refresh();
+      }
+    } catch (err) {
+      setError("An error occurred during sign-up. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Legacy Password Login (rollback / backward compatibility)
+  const handleLegacyLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -68,13 +141,10 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: legacyPassword }),
       });
 
       if (res.ok) {
-        // No mustChangePassword branch here: the API only sets that flag alongside a
-        // 403, so it can never arrive on the ok path. See the note above the warning
-        // text below for what actually happens on a default-password remote login.
         router.push("/dashboard");
         router.refresh();
       } else {
@@ -97,7 +167,6 @@ export default function LoginPage() {
   const oidcAvailable = oidcConfigured && ["oidc", "both"].includes(authMode);
   const passwordAvailable = authMode !== "oidc" || !oidcConfigured;
 
-  // Show loading state while checking password
   if (hasPassword === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg p-4">
@@ -136,89 +205,207 @@ export default function LoginPage() {
             </h1>
           </div>
           <p className="text-text-muted">
-            {authMode === "oidc" && oidcConfigured
-              ? "Sign in with your OIDC provider to access the dashboard"
-              : "Enter your password to access the dashboard"}
+            {betterAuthConfigured && !useLegacy
+              ? (activeTab === "signin" ? "Sign in to access the dashboard" : "Create an account")
+              : (authMode === "oidc" && oidcConfigured
+                ? "Sign in with your OIDC provider to access the dashboard"
+                : "Enter your password to access the dashboard")}
           </p>
         </div>
 
         <Card>
-          {/* v0.5.136 made a default-password remote login a hard 403 rather than an
-              advisory flag, which left the "set a new password here" form this page used
-              to show unreachable: mustChangePassword only ever ships with that 403, and
-              the page read it on the ok path. The form and its state are gone. */}
           <div className="flex flex-col gap-4">
-            {oidcAvailable && (
-              <Button type="button" variant="primary" className="w-full" onClick={handleOidcLogin}>
-                {oidcLoginLabel}
-              </Button>
-            )}
-
-            {oidcAvailable && passwordAvailable && <div className="h-px bg-border/60" />}
-
-            {passwordAvailable ? (
-              <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                {((authMode === "oidc" && !oidcConfigured) || (authMode === "both" && !oidcConfigured)) && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
-                    OIDC login is enabled, but the issuer/client fields are not configured yet. Password login is still available for recovery.
-                  </p>
-                )}
-
-                {authMode === "both" && oidcConfigured && (
-                  <p className="text-xs text-text-muted text-center">
-                    Password and OIDC login are both enabled.
-                  </p>
-                )}
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium">Password</label>
-                  <Input
-                    type="password"
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoFocus={!oidcAvailable}
-                  />
-                  {error && <p className="text-xs text-red-500">{error}</p>}
-                  {retryAfter > 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Locked. Retry in <span className="font-mono">{retryAfter}s</span>.
-                    </p>
-                  )}
-                  {resetHint && (
-                    <p className="text-xs text-text-muted">
-                      Forgot password? Open <code className="bg-sidebar px-1 rounded">krouter</code> CLI on the host → <b>Settings</b> → <b>Reset Password to Default</b>.
-                    </p>
-                  )}
+            {/* Better Auth interface (when configured and not in legacy mode) */}
+            {betterAuthConfigured && !useLegacy ? (
+              <div className="flex flex-col gap-4">
+                {/* Tabs for Sign In vs Sign Up */}
+                <div className="flex border-b border-border">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab("signin"); setError(""); }}
+                    className={`flex-1 py-2 text-sm font-medium border-b-2 text-center transition-colors ${
+                      activeTab === "signin"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-text-muted hover:text-text-main"
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab("signup"); setError(""); }}
+                    className={`flex-1 py-2 text-sm font-medium border-b-2 text-center transition-colors ${
+                      activeTab === "signup"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-text-muted hover:text-text-main"
+                    }`}
+                  >
+                    Sign Up
+                  </button>
                 </div>
 
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  loading={loading}
-                  disabled={retryAfter > 0}
+                <form
+                  onSubmit={activeTab === "signin" ? handleBetterAuthSignIn : handleBetterAuthSignUp}
+                  className="flex flex-col gap-4"
                 >
-                  {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login"}
-                </Button>
+                  {activeTab === "signup" && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium">Name</label>
+                      <Input
+                        type="text"
+                        placeholder="Your name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        autoComplete="name"
+                      />
+                    </div>
+                  )}
 
-                {hasPassword === false && (
-                  <>
-                    <p className="text-xs text-center text-text-muted mt-2">
-                      No password set yet: use the <code className="bg-sidebar px-1 rounded">INITIAL_PASSWORD</code> kRouter
-                      was started with, or the default <code className="bg-sidebar px-1 rounded">123456</code> on the
-                      machine kRouter runs on.
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">Email</label>
+                    <Input
+                      type="email"
+                      placeholder="admin@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoFocus
+                      autoComplete="email"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">Password</label>
+                    <Input
+                      type="password"
+                      placeholder="Enter password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      autoComplete={activeTab === "signin" ? "current-password" : "new-password"}
+                    />
+                  </div>
+
+                  {error && <p className="text-xs text-red-500">{error}</p>}
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    className="w-full"
+                    loading={loading}
+                  >
+                    {activeTab === "signin" ? "Sign In with Email" : "Create Account"}
+                  </Button>
+
+                  {activeTab === "signup" && (
+                    <p className="text-xs text-center text-text-muted">
+                      Public sign-ups receive standard user permissions. Dashboard admin privileges require an administrator account.
                     </p>
-                    <p className="text-xs text-center text-amber-600 dark:text-amber-400">
-                      Security risk: no password set. Remote logins are refused until you set one — sign in, then set
-                      it under Settings → Security.
-                    </p>
-                  </>
-                )}
-              </form>
+                  )}
+                </form>
+
+                {/* Switch to legacy login fallback */}
+                <div className="text-center pt-2 border-t border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => { setUseLegacy(true); setError(""); }}
+                    className="text-xs text-text-muted hover:text-primary transition-colors underline"
+                  >
+                    Switch to Password / OIDC login (Rollback mode)
+                  </button>
+                </div>
+              </div>
             ) : (
-              error && <p className="text-xs text-red-500">{error}</p>
+              /* Legacy Password / OIDC Auth */
+              <div className="flex flex-col gap-4">
+                {betterAuthConfigured && (
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                      Legacy Auth Mode
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setUseLegacy(false); setError(""); }}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      ← Back to Better Auth
+                    </button>
+                  </div>
+                )}
+
+                {oidcAvailable && (
+                  <Button type="button" variant="primary" className="w-full" onClick={handleOidcLogin}>
+                    {oidcLoginLabel}
+                  </Button>
+                )}
+
+                {oidcAvailable && passwordAvailable && <div className="h-px bg-border/60" />}
+
+                {passwordAvailable ? (
+                  <form onSubmit={handleLegacyLogin} className="flex flex-col gap-4">
+                    {((authMode === "oidc" && !oidcConfigured) || (authMode === "both" && !oidcConfigured)) && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+                        OIDC login is enabled, but the issuer/client fields are not configured yet. Password login is still available for recovery.
+                      </p>
+                    )}
+
+                    {authMode === "both" && oidcConfigured && (
+                      <p className="text-xs text-text-muted text-center">
+                        Password and OIDC login are both enabled.
+                      </p>
+                    )}
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium">Password</label>
+                      <Input
+                        type="password"
+                        placeholder="Enter password"
+                        value={legacyPassword}
+                        onChange={(e) => setLegacyPassword(e.target.value)}
+                        required
+                        autoFocus={!oidcAvailable}
+                      />
+                      {error && <p className="text-xs text-red-500">{error}</p>}
+                      {retryAfter > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Locked. Retry in <span className="font-mono">{retryAfter}s</span>.
+                        </p>
+                      )}
+                      {resetHint && (
+                        <p className="text-xs text-text-muted">
+                          Forgot password? Open <code className="bg-sidebar px-1 rounded">krouter</code> CLI on the host → <b>Settings</b> → <b>Reset Password to Default</b>.
+                        </p>
+                      )}
+                    </div>
+
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      className="w-full"
+                      loading={loading}
+                      disabled={retryAfter > 0}
+                    >
+                      {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login"}
+                    </Button>
+
+                    {hasPassword === false && (
+                      <>
+                        <p className="text-xs text-center text-text-muted mt-2">
+                          No password set yet: use the <code className="bg-sidebar px-1 rounded">INITIAL_PASSWORD</code> kRouter
+                          was started with, or the default <code className="bg-sidebar px-1 rounded">123456</code> on the
+                          machine kRouter runs on.
+                        </p>
+                        <p className="text-xs text-center text-amber-600 dark:text-amber-400">
+                          Security risk: no password set. Remote logins are refused until you set one — sign in, then set
+                          it under Settings → Security.
+                        </p>
+                      </>
+                    )}
+                  </form>
+                ) : (
+                  error && <p className="text-xs text-red-500">{error}</p>
+                )}
+              </div>
             )}
           </div>
         </Card>
