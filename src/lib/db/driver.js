@@ -70,6 +70,14 @@ async function initAdapter() {
 
   const { runMigrationOnce } = await import("./migrate.js");
   await runMigrationOnce(adapter);
+
+  try {
+    const { initLayerbaseSync } = await import("./layerbaseSync.js");
+    await initLayerbaseSync(adapter);
+  } catch (err) {
+    console.warn("[DB] Failed to initialize Layerbase sync:", err.message);
+  }
+
   return adapter;
 }
 
